@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OD Report</title>
+<meta name="description" content="Aplikasi pelaporan harian, mingguan, bulanan dan monitoring dokumen Divisi Organization Development.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+<!-- AdminLTE -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
+<!-- App CSS -->
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="hold-transition sidebar-mini layout-fixed logged-out">
+<noscript><p style="padding:24px;font-family:sans-serif">Aplikasi ini membutuhkan JavaScript.</p></noscript>
+
+<div class="wrapper">
+
+  <!-- Navbar -->
+  <nav class="main-header navbar navbar-expand navbar-light" id="topbar">
+    <ul class="navbar-nav align-items-center">
+      <li class="nav-item">
+        <a class="nav-link topbar-toggle" data-widget="pushmenu" href="#" role="button" aria-label="Buka/tutup menu">
+          <i class="fas fa-bars"></i>
+        </a>
+      </li>
+      <li class="nav-item d-none d-sm-flex align-items-center">
+        <span class="topbar-sep" aria-hidden="true"></span>
+        <span class="topbar-title" id="crumb"></span>
+      </li>
+    </ul>
+    <ul class="navbar-nav ml-auto align-items-center">
+      <li class="nav-item dropdown">
+        <a href="#" class="nav-link topbar-toggle notification-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="Notifikasi">
+          <i class="far fa-bell"></i>
+          <span class="notification-badge" id="nb" style="display:none"></span>
+        </a>
+        <div class="dropdown-menu dropdown-menu-right notification-menu" id="nm"></div>
+      </li>
+      <li class="nav-item ml-2">
+        <button class="topbar-toggle th-btn" type="button" id="th" onclick="toggleTheme()" aria-label="Ganti tema"></button>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Sidebar -->
+  <aside class="main-sidebar sidebar-light-primary" id="sb">
+    <a href="#" class="brand-link" onclick="go('dash');return false;">
+      <img src="favicon.svg" alt="" class="brand-logo">
+      <span class="brand-text font-weight-bold">OD Report</span>
+    </a>
+    <div class="sidebar">
+      <nav>
+        <div id="nav"></div>
+      </nav>
+      <div id="su"></div>
+    </div>
+  </aside>
+
+  <!-- Content Wrapper -->
+  <div class="content-wrapper">
+    <div id="v"></div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="main-footer">
+    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:8px">
+      <span>&copy; 2026 OD Report &middot; Organization Development</span>
+      <span class="d-none d-sm-inline">Versi 1.0.0</span>
+    </div>
+  </footer>
+
+</div><!-- /.wrapper -->
+
+<div id="login" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="md"></div>
+
+<!-- jQuery -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<!-- Bootstrap 4 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.1/js/bootstrap.bundle.min.js"></script>
+<!-- AdminLTE -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/3.2.0/js/adminlte.min.js"></script>
+<!-- Chart.js (dashboard) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- App JS -->
+<script src="assets/app.js" defer></script>
+</body>
+</html>

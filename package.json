@@ -1,0 +1,9 @@
+{
+  "name": "od-report",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Organization Development Report - situs statis, siap deploy di Vercel",
+  "scripts": {
+    "dev": "npx serve . -l 3000"
+  }
+}
