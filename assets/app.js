@@ -58,18 +58,17 @@ const pages = [
   ["weekly", "Weekly Report", ""],
   ["monthly", "Monthly Report", ""],
   ["appr", "Approval Dokumen", ""],
-  ["arc", "Impor Data", ""],
   ["usr", "User Management", ""],
   ["set", "Pengaturan", ""]
 ];
-const NAV = [["", ["dash"]], ["Laporan", ["daily", "weekly", "monthly"]], ["Dokumen", ["appr"]], ["Sistem", ["arc", "usr", "set"]]];
+const NAV = [["", ["dash"]], ["Laporan", ["daily", "weekly", "monthly"]], ["Dokumen", ["appr"]], ["Sistem", ["usr", "set"]]];
 const guide = () => "";
 const ROLES = ["OD Leader", "OD Staff", "Viewer"];
 const DEFAULT_USERS = [{ n: "Sekar Ayuning Srikandi", p: "OD Leader", u: "sekar" }, { n: "Rizal Hamdi", p: "OD Staff", u: "rizal" }, { n: "Visitor", p: "Viewer", u: "visitor" }];
 let users = DEFAULT_USERS.map(u => ({ ...u })), team = [];
 const syncTeam = () => { team = users.filter(u => u.p != "Viewer"); };
 syncTeam();
-const JN = ["IK", "JD", "SOP", "SE", "MEMO", "Dokumen Lainnya"];
+const JN = ["IK", "JD", "SOP", "SE", "MEMO", "SA", "Dokumen Lainnya"];
 const BU = ["CV CS", "CV CS AUTO EV", "CV TOP", "PT SMI", "PT MSI", "PT CSN", "RISM"];
 const DEFAULT_ST = [{ n: "On Progress", t: "open" }, { n: "Cancel", t: "cancel" }, { n: "Release", t: "done" }];
 let statuses = DEFAULT_ST.map(x => ({ ...x })), ST = [], owners = {};
@@ -178,7 +177,6 @@ function cleanUsers(a) {
   if (!Array.isArray(a)) return null;
   const u = a.filter(x => x && typeof x.n == "string" && x.n.trim() && ROLES.includes(x.p)).map(x => ({ n: x.n.trim().slice(0, 60), p: x.p, u: typeof x.u == "string" ? x.u.trim().toLowerCase().slice(0, 20) : "", pin: typeof x.pin == "string" ? x.pin : "" }));
   if (!u.some(x => x.p == "OD Leader")) return null;
-  if (!u.some(x => x.p == "Viewer")) u.push({ n: "Visitor", p: "Viewer", u: "visitor", pin: "" });
   return u;
 }
 function sanitize(s) {
@@ -406,7 +404,7 @@ function go(p, ns) {
   else if (team.length && !team.some(u => u.n == fp)) fp = team[0].n;
 
   // Sidebar nav (grup seperti modul-web)
-  const ICONS = { dash: "fas fa-th-large", daily: "fas fa-clipboard-list", weekly: "fas fa-calendar-alt", monthly: "fas fa-chart-line", appr: "far fa-file-alt", arc: "fas fa-file-upload", usr: "fas fa-users", set: "fas fa-cog" };
+  const ICONS = { dash: "fas fa-th-large", daily: "fas fa-clipboard-list", weekly: "fas fa-calendar-alt", monthly: "fas fa-chart-line", appr: "far fa-file-alt", usr: "fas fa-users", set: "fas fa-cog" };
   const LABELS = {}; pages.forEach(x => LABELS[x[0]] = x[1]);
 
   $("#nav").innerHTML = `<ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
@@ -876,18 +874,18 @@ const V = {
           a.c > 1 ? `<span class="badge badge-secondary">${a.c}×</span>` : "",
           dTitle(a.dc) ? `<span class="badge badge-secondary">${esc(dTitle(a.dc).slice(0,40))}</span>` : "",
         ].filter(Boolean).join(" ");
-        const notes = [
-          a.k != "-" ? `<div class="wk-note"><span class="wk-note-label">Kendala</span>${esc(a.k)}</div>` : "",
-          a.s != "-" ? `<div class="wk-note"><span class="wk-note-label">Solusi</span>${esc(a.s)}</div>` : "",
-          a.ke != "-" ? `<div class="wk-note"><span class="wk-note-label">Ket.</span>${esc(a.ke)}</div>` : "",
-        ].filter(Boolean).join("");
+        const dd = v => v && v != "-"
+          ? `<details class="wk-dd"><summary><span class="wk-dd-prev">${esc(v)}</span></summary><div class="wk-dd-body">${esc(v)}</div></details>`
+          : `<span class="text-muted">–</span>`;
         return `<tr>
           <td class="text-center text-muted" style="width:48px">${i + 1}</td>
           <td>
             <span class="font-weight-500">${esc(a.n)}</span>
             ${extra ? `<div class="mt-1 d-flex flex-wrap gap-1">${extra}</div>` : ""}
-            ${notes}
           </td>
+          <td class="wk-dd-cell">${dd(a.k)}</td>
+          <td class="wk-dd-cell">${dd(a.s)}</td>
+          <td class="wk-dd-cell">${dd(a.ke)}</td>
           <td class="text-right" style="white-space:nowrap">
             ${actBadge(a.r)}
           </td>
@@ -905,7 +903,7 @@ const V = {
         <div class="wsec-tbl">
           <div class="table-responsive">
             <table class="table table-hover mb-0">
-              <thead><tr><th style="width:48px" class="text-center">#</th><th>Pekerjaan</th><th class="text-right" style="width:120px">Status</th></tr></thead>
+              <thead><tr><th style="width:48px" class="text-center">#</th><th style="min-width:200px">Pekerjaan</th><th class="wk-dd-cell">Kendala</th><th class="wk-dd-cell">Solusi</th><th class="wk-dd-cell">Ket.</th><th class="text-right" style="width:120px">Status</th></tr></thead>
               <tbody>${trows}</tbody>
             </table>
           </div>
@@ -1081,20 +1079,6 @@ const V = {
       body);
   },
 
-  arc() {
-    const body = `<div class="card">
-      <div class="card-header"><h3 class="card-title">Impor File Excel (.xlsx)</h3></div>
-      <div class="card-body">
-        <p class="text-muted">Pilih file <code>.xlsx</code> dari ekspor Weekly Report atau Approval untuk diimpor ke aplikasi.</p>
-        <button type="button" class="btn btn-primary edit" onclick="document.getElementById('xf').click()">
-          <i class="fas fa-upload mr-1"></i>Pilih Berkas .xlsx
-        </button>
-        <input type="file" id="xf" accept=".xlsx,.xls" onchange="readXlsx(this)" style="display:none">
-      </div>
-    </div>`;
-    return pageWrap("Impor Data", "Import dari file Excel Weekly atau Approval", "", body);
-  },
-
   usr() {
     const hak = { "OD Leader": "Kelola dokumen & pengguna", "OD Staff": "Input pekerjaan & kelola dokumen sendiri", "Viewer": "Hanya melihat" };
     const body = `<div class="card">
@@ -1173,27 +1157,7 @@ const V = {
           </div>` : ""}
         </div>
         <div class="col-lg-6">
-          <div class="card edit">
-            <div class="card-header"><h3 class="card-title">Penyimpanan Data</h3></div>
-            <div class="card-body">
-              <div class="d-flex flex-wrap gap-2">
-                <button type="button" class="btn btn-primary" onclick="backup()"><i class="fas fa-download mr-1"></i>Backup (.json)</button>
-                <button type="button" class="btn btn-default" onclick="document.getElementById('rf').click()"><i class="fas fa-upload mr-1"></i>Pulihkan Backup</button>
-                <input type="file" id="rf" accept="application/json,.json" onchange="restore(this)" style="display:none">
-                <button type="button" class="btn btn-default" onclick="go('arc')"><i class="fas fa-file-excel mr-1"></i>Impor Excel</button>
-              </div>
-            </div>
-          </div>
           ${ro() ? "" : syncCard()}
-          <div class="card edit danger-zone">
-            <div class="card-header"><h3 class="card-title text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>Tindakan Lanjutan</h3></div>
-            <div class="card-body">
-              <div class="d-flex flex-wrap gap-2">
-                <button type="button" class="btn btn-default" onclick="resetDemo()">Kembalikan Data Contoh</button>
-                <button type="button" class="btn btn-danger" onclick="clearAll()">Kosongkan Semua Data</button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>`;
     return pageWrap("Pengaturan", "", "", body);
@@ -1602,7 +1566,7 @@ function dRows(rw, u) {
   rw.forEach(c => {
     const d = parseDate(c[0]), t = c[1];
     if (!t || !d) { bad++; return; }
-    const jm = t.match(/(?:^|[^A-Za-z])(SOP|JD|IK|SE|MEMO)(?![A-Za-z])/), bm = t.match(/\[([^\]]+)\]/g), ct = c[3] && !/^catatan$/i.test(c[3]) ? c[3] : "";
+    const jm = t.match(/(?:^|[^A-Za-z])(SOP|JD|IK|SE|MEMO|SA)(?![A-Za-z])/), bm = t.match(/\[([^\]]+)\]/g), ct = c[3] && !/^catatan$/i.test(c[3]) ? c[3] : "";
     items.push({ t, j: jm ? jm[1] : "Dokumen Lainnya", bu: bm ? bm[bm.length - 1].slice(1, -1).trim() : "-", st: stDoc(c[2] || ""), o: u, sub: ddmm(d), rcv: "-", mo: mk(d), ct });
   });
   return { items: items.map(it => ({ ...it, o: it.o || picFor(it.j), id: newId() })), bad };
