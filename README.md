@@ -12,6 +12,7 @@ od-report/
 ├── assets/
 │   ├── style.css       # tampilan (mode gelap/terang)
 │   └── app.js          # seluruh logika aplikasi
+├── apps-script.gs      # penerima di Google Sheets (dipasang di spreadsheet, bukan di Vercel)
 ├── favicon.svg
 ├── vercel.json         # konfigurasi Vercel + header keamanan
 ├── package.json        # hanya untuk menjalankan lokal (npm run dev)
@@ -79,12 +80,32 @@ Data versi lama otomatis dimigrasi (status lama menjadi On Progress / Release).
 | Hal | Kondisi saat ini |
 |---|---|
 | Penyimpanan | `localStorage` di browser masing-masing perangkat |
-| Berbagi antar pengguna | **Belum**. Data satu orang tidak terlihat orang lain |
+| Berbagi antar pengguna | **Belum** di website. Data satu orang tidak terlihat orang lain, tetapi pekerjaan Daily Report semua user terkumpul di Google Sheets (lihat bagian Sinkron) |
 | Login | **Wajib** username + PIN saat membuka aplikasi. Username bawaan `sekar` / `rizal` / `visitor`, PIN awal `1234`, ubah di User Management. OD Staff hanya melihat report miliknya; OD Leader & Viewer melihat semua. Bukan pengamanan penuh (data tetap di localStorage) |
 | Backup | Pengaturan → Backup data (.json) dan Pulihkan |
 | Ekspor | Excel (.csv, dibuka di Excel), Word (.doc), PDF (lewat dialog cetak → Simpan sebagai PDF) |
 
 Jika data dipakai bersama oleh seluruh tim (Leader melihat laporan Staff secara langsung), dibutuhkan **database + login sungguhan** (misalnya Supabase atau Vercel Postgres). Itu tahap berikutnya dan struktur kode ini sudah disiapkan untuk itu.
+
+## Sinkron Daily Report ke Google Sheets
+
+Pekerjaan yang sudah **Simpan Laporan** di Daily Report otomatis masuk ke spreadsheet Weekly Report:
+tab bulan (`Nov'26`, `Des'26`, …) → blok **POSISI** → blok **WEEK**, kolom DETAIL PEKERJAAN / STATUS / KENDALA / SOLUSI / KETERANGAN.
+Berlaku untuk setiap user dari perangkatnya masing-masing. Status: Done → Closed, On Progress → On Progress, Hold → Open.
+Edit memperbarui baris yang sama dan hapus ikut menghapus barisnya (dikenali lewat kolom H "SYNC ID" yang disembunyikan).
+Baris yang diketik manual di sheet tidak pernah diubah. Data contoh dan hasil impor Excel tidak dikirim.
+Minggu mengikuti aturan template: Sabtu–Jumat, masuk ke bulan hari Rabu-nya.
+
+Pemasangan (sekali, oleh pemilik spreadsheet):
+1. Buka spreadsheet Weekly Report → **Ekstensi → Apps Script**.
+2. Hapus isi `Code.gs`, tempel seluruh isi `apps-script.gs`, lalu Simpan.
+3. **Deploy → Deployment baru → Aplikasi web**: Jalankan sebagai **Saya**, Akses **Siapa saja** → Deploy → izinkan akses → salin URL berakhiran `/exec`.
+4. Di `assets/app.js`, isi `SYNC_DEFAULT` (`url` = URL /exec, `wl` = link spreadsheet), commit & push.
+   Semua user langsung tersambung tanpa setting. (Alternatif: isi lewat **Pengaturan → Sinkron ke Google Sheets** di akun OD Leader, hanya berlaku di perangkat itu.)
+5. Di akun OD Leader klik **Tes Koneksi**. Status sinkron setiap user terlihat di menu Pengaturan masing-masing.
+
+Setiap kali `apps-script.gs` diubah: **Deploy → Kelola deployment → pensil → Versi: Versi baru → Deploy** (URL tetap sama).
+Catatan: tidak memakai kode rahasia. Siapa pun yang tahu URL /exec (terlihat di kode situs dan repo) bisa mengirim baris ke spreadsheet.
 
 ## Catatan
 - Zona waktu tanggal: **Asia/Jakarta**. Minggu dihitung **Sabtu–Jumat**; "Week N" mengikuti bulan tanggal Sabtu awal minggu.

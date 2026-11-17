@@ -32,8 +32,12 @@ const ddmm = d => d.slice(8) + "/" + d.slice(5, 7);
 const mk = d => d.slice(0, 7);                                   // "2026-11"
 const mlab = m => MONTHS[+m.slice(5) - 1] + " " + m.slice(0, 4);
 const wkStart = d => addDays(d, -((parse(d).getUTCDay() + 1) % 7)); // Sabtu awal minggu
-const wkNum = s => Math.floor((+s.slice(8) - 1) / 7) + 1;
-const wkLab = s => "Week " + wkNum(s) + " " + MON3[+s.slice(5, 7) - 1];
+// Minggu (Sabtu-Jumat) masuk ke bulan hari Rabu-nya, sama dengan file Weekly Report tim
+// (mis. 31 Okt - 6 Nov = Week 1 November).
+const wkMid = s => addDays(s, 4);
+const wkMonth = s => mk(wkMid(s));
+const wkNum = s => Math.floor((+wkMid(s).slice(8) - 1) / 7) + 1;
+const wkLab = s => "Week " + wkNum(s) + " " + MON3[+wkMid(s).slice(5, 7) - 1];
 function wkRng(s) {
   const e = addDays(s, 6);
   return s.slice(5, 7) == e.slice(5, 7)
@@ -181,7 +185,7 @@ function sanitize(s) {
   const okA = a => a && typeof a.d == "string" && /^\d{4}-\d{2}-\d{2}$/.test(a.d) && typeof a.n == "string" && typeof a.u == "string" && typeof a.r == "string";
   const okD = d => d && typeof d.t == "string" && typeof d.j == "string" && typeof d.o == "string";
   const stl = cleanStatuses(s.statuses) || DEFAULT_ST.map(x => ({ ...x }));
-  const a = (s.acts || []).filter(okA).map(x => ({ id: +x.id || 0, d: x.d, u: x.u, n: x.n, r: x.r, k: String(x.k ?? "-"), s: String(x.s ?? "-"), sv: x.sv ? 1 : 0, ke: String(x.ke ?? "-"), imp: x.imp ? 1 : 0, dc: typeof x.dc == "string" ? x.dc : "" }));
+  const a = (s.acts || []).filter(okA).map(x => ({ id: +x.id || 0, d: x.d, u: x.u, n: x.n, r: x.r, k: String(x.k ?? "-"), s: String(x.s ?? "-"), sv: x.sv ? 1 : 0, ke: String(x.ke ?? "-"), imp: x.imp ? 1 : 0, dc: typeof x.dc == "string" ? x.dc : "", g: typeof x.g == "string" ? x.g : "" }));
   const d = (s.docs || []).filter(okD).map(x => ({ id: typeof x.id == "string" && x.id ? x.id : newId(), t: x.t, j: x.j, bu: String(x.bu ?? "-"), st: migSt(x.st, stl), o: x.o, sub: String(x.sub ?? "-"), rcv: String(x.rcv ?? "-"), mo: /^\d{4}-\d{2}$/.test(x.mo) ? x.mo : mk(TODAY), ct: String(x.ct ?? "") }));
   let max = 0;
   a.forEach(x => { max = Math.max(max, x.id); });
@@ -642,7 +646,14 @@ const V = {
 
     // Data table bertab + pagination (10 baris/halaman)
     const PER = 10;
-    const actsSorted = wl.slice().sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : b.id - a.id);
+    // Leader/Viewer melihat aktivitas semua orang: kelompokkan per orang (urutan tim), lalu terbaru di atas
+    const grpActs = canSeeAll() && new Set(wl.map(a => a.u)).size > 1;
+    const uIdx = n => { const i = team.findIndex(u => u.n == n); return i < 0 ? team.length : i; };
+    const actsSorted = wl.slice().sort((a, b) =>
+      (grpActs && a.u != b.u ? (uIdx(a.u) - uIdx(b.u) || String(a.u).localeCompare(String(b.u))) : 0)
+      || (a.d < b.d ? 1 : a.d > b.d ? -1 : b.id - a.id));
+    const actCnt = {};
+    wl.forEach(a => { actCnt[a.u] = (actCnt[a.u] || 0) + 1; });
     const docsSorted = sortDocs(vd);
     const rows = dashTab == "acts" ? actsSorted : docsSorted;
     const np = Math.max(1, Math.ceil(rows.length / PER));
@@ -661,7 +672,7 @@ const V = {
     };
 
     const tableBody = dashTab == "acts"
-      ? (slice.length ? slice.map(a => `<tr>
+      ? (slice.length ? slice.map((a, i) => `${grpActs && (i == 0 || slice[i - 1].u != a.u) ? `<tr class="dash-grp"><td colspan="5"><i class="fas fa-user"></i>${esc(a.u)}<span class="dash-grp-sub">${esc(pos(a.u))} &middot; ${actCnt[a.u]} aktivitas</span></td></tr>` : ""}<tr>
           <td class="text-muted" style="white-space:nowrap">${fdm(a.d)}</td>
           <td><span class="d-inline-block text-truncate" style="max-width:280px">${esc(a.n)}</span>${a.dc ? `<span class="cell-sub"><i class="far fa-file-alt"></i> ${esc(dTitle(a.dc).slice(0, 60))}</span>` : ""}</td>
           <td class="text-muted">${esc(a.u)}</td>
@@ -1173,7 +1184,7 @@ const V = {
               </div>
             </div>
           </div>
-          ${lead() ? syncCard() : ""}
+          ${ro() ? "" : syncCard()}
           <div class="card edit danger-zone">
             <div class="card-header"><h3 class="card-title text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>Tindakan Lanjutan</h3></div>
             <div class="card-body">
@@ -1197,6 +1208,7 @@ function addA() {
   if (!n) return toast("Nama pekerjaan wajib diisi");
   const a = A(TODAY, me.n, n, $("#rr").value, $("#kk").value.trim() || "-", $("#ss").value.trim() || "-", 0, $("#ee").value.trim() || "-");
   a.dc = $("#rd") ? $("#rd").value : "";
+  a.g = newId();          // SYNC ID: hanya pekerjaan dari Daily Report yang dikirim ke Google Sheets
   acts.unshift(a);
   ["nn", "kk", "ss", "ee"].forEach(i => $("#" + i).value = "");
   prev = ""; go("daily"); toast("Aktivitas ditambahkan");
@@ -1209,7 +1221,21 @@ function mv(id, d) {
   prev = ""; go("daily");
 }
 function gen() {
+  if (lead()) return genLead();
   prev = "DAILY REPORT · " + fdl(TODAY) + "\n" + me.n + "\n\n" + mineD().map((a, i) => `${i + 1}. ${a.n}\n   *Hasil* : ${a.r}\n   *Kendala* : ${a.k}\n   *Solusi* : ${a.s}`).join("\n\n");
+  go("daily");
+}
+// OD Leader: format Afternoon Briefing gabungan tim. Bagian Leader diberi nama tebal,
+// bagian anggota lain (pekerjaan hari ini) menyusul tanpa nama. Nama pekerjaan otomatis KAPITAL.
+function genLead() {
+  const item = (a, i) => `${i + 1}. ${a.n.toUpperCase()}\n   *Hasil* : ${a.r}\n   *Kendala* : ${a.k}\n   *Solusi* : ${a.s}`;
+  const list = l => l.map(item).join("\n\n");
+  const others = team.filter(u => u.n != me.n)
+    .map(u => acts.filter(a => a.u == u.n && a.d == TODAY))
+    .filter(l => l.length);
+  prev = "Terlampir Bu Arleni\n*Afternoon Briefing BusDev*\n(" + fdl(TODAY) + ")\n\n"
+    + "*" + me.n.split(" ")[0] + "*\n" + list(mineD())
+    + others.map(l => "\n\n" + list(l)).join("");
   go("daily");
 }
 function cp() {
@@ -1222,7 +1248,7 @@ function saveRep() { mineD().forEach(a => a.sv = 1); prev = ""; go("daily"); toa
 function del(id) {
   const o = acts.find(x => x.id == id);
   if (!o || ro() || (o.u != me.n && !lead())) return;
-  modal("Hapus aktivitas?", '<p class="text-muted">Aktivitas ini akan dihapus permanen.</p>', () => { acts = acts.filter(a => a.id != id); prev = ""; go("daily"); toast("Aktivitas dihapus"); }, "Hapus");
+  modal("Hapus aktivitas?", '<p class="text-muted">Aktivitas ini akan dihapus permanen.</p>', () => { syncQueueDel(o); acts = acts.filter(a => a.id != id); prev = ""; go("daily"); toast("Aktivitas dihapus"); }, "Hapus");
 }
 function ed(id) {
   const a = acts.find(x => x.id == id);
@@ -1440,21 +1466,93 @@ function monthlySecs(u, m) {
     { h: pos(u) + " · " + u + " · Achievement dokumen", head: ["No", "Achievement", "Jenis", "Badan usaha", "Status", "Catatan"], rows: d.map((a, i) => [i + 1, a.t, a.j, a.bu, a.st, a.ct || ""]) }
   ];
 }
-function expOne() {
-  outTable("Excel", "Weekly Report · " + fp, [weeklySec(fp, fw, fs)], "weekly-" + slug(fp));
-  toast("File Excel (.csv) diunduh");
+/* ---------- Export Weekly (.xlsx) mengikuti template "Weekly Report" ----------
+   Satu sheet per bulan ("NOV 1-2 (2026)"), satu blok per minggu: baris judul "Posisi | Week N (07 - 13 November 2026)"
+   lalu daftar pekerjaan (KAPITAL) dengan kolom Posisi di-merge per jabatan. Antar minggu dipisah satu baris kosong.
+   Minggu (Sabtu-Jumat) masuk ke bulan hari Rabu-nya, sama seperti file Weekly Report yang dipakai tim. */
+function loadExcelJS() {
+  return new Promise((res, rej) => {
+    if (window.ExcelJS) return res();
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+    s.onload = () => res(); s.onerror = () => rej(new Error("exceljs"));
+    document.head.appendChild(s);
+  });
 }
+const POS_FULL = { "OD Leader": "Organization Development Leader", "OD Staff": "Organization Development Staff" };
+function xwLab(s) {
+  const e = addDays(s, 6), M = d => MONTHS[+d.slice(5, 7) - 1];
+  const a = s.slice(5, 7) == e.slice(5, 7) ? s.slice(8) : s.slice(8) + " " + M(s) + (s.slice(0, 4) != e.slice(0, 4) ? " " + s.slice(0, 4) : "");
+  return "Week " + wkNum(s) + " (" + a + " - " + e.slice(8) + " " + M(e) + " " + e.slice(0, 4) + ")";
+}
+async function expWeeklyXlsx(mem, per, st, suffix) {
+  const l = saved().filter(a => mem.includes(a.u) && (per == "Semua" || wkK(a) == per) && (!st || st == "Semua" || a.r == st));
+  if (!l.length) return toast("Tidak ada data untuk periode ini");
+  try { await loadExcelJS(); } catch (e) { return toast("Modul Excel gagal dimuat. Pastikan internet aktif"); }
+  const order = [...team.map(u => u.n).filter(n => mem.includes(n)), ...mem.filter(n => !team.some(u => u.n == n))];
+  const byM = {};
+  [...new Set(l.map(wkK))].sort().forEach(w => (byM[wkMonth(w)] = byM[wkMonth(w)] || []).push(w));
+  const wb = new ExcelJS.Workbook();
+  const thin = { style: "thin" }, bd = { top: thin, left: thin, bottom: thin, right: thin };
+  const font = { name: "Calibri", size: 10 };
+  Object.keys(byM).sort().forEach(m => {
+    const wks = byM[m];
+    const ws = wb.addWorksheet(MON3[+m.slice(5) - 1].toUpperCase() + " 1-" + Math.max(...wks.map(wkNum)) + " (" + m.slice(0, 4) + ")");
+    ws.getColumn(1).width = 33.57;
+    ws.getColumn(2).width = 188.86;
+    let r = 1;
+    wks.forEach((w, i) => {
+      if (i) r++;                                                  // baris kosong antar minggu
+      ["Posisi", xwLab(w)].forEach((v, j) => {
+        const c = ws.getCell(r, j + 1);
+        c.value = v; c.font = { ...font, bold: true }; c.border = bd;
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4B084" } };
+        c.alignment = { horizontal: "center" };
+      });
+      r++;
+      const groups = [];
+      order.forEach(n => {
+        const p = POS_FULL[pos(n)] || pos(n), items = wg(l.filter(a => a.u == n && wkK(a) == w)).reverse().map(a => a.n.toUpperCase()); // kronologis seperti template
+        if (!items.length) return;
+        const g = groups.find(x => x.p == p);
+        g ? g.items.push(...items) : groups.push({ p, items });
+      });
+      groups.forEach(g => {
+        const r0 = r;
+        g.items.forEach(t => {
+          const b = ws.getCell(r, 2);
+          b.value = t; b.font = font; b.border = bd; b.alignment = { vertical: "middle" };
+          ws.getCell(r, 1).border = bd;
+          r++;
+        });
+        if (r - 1 > r0) ws.mergeCells(r0, 1, r - 1, 1);
+        const a = ws.getCell(r0, 1);
+        a.value = g.p; a.font = font; a.border = bd;
+        a.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      });
+    });
+  });
+  const buf = await wb.xlsx.writeBuffer();
+  const name = "Weekly Report " + (per == "Semua" ? "Semua Minggu" : xwLab(per)) + (suffix ? " - " + suffix : "") + ".xlsx";
+  const u = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const x = document.createElement("a");
+  x.href = u; x.download = name; document.body.appendChild(x); x.click(); x.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 3000);
+  toast("File Excel (.xlsx) diunduh");
+}
+function expOne() { expWeeklyXlsx([fp], fw, fs, fp); }
 function expG(k) {
   const opts = k == "Weekly" ? [["Semua", "Semua minggu"], ...weeks().map(w => [w, wkLab(w) + " (" + wkRng(w) + ")"])] : months().map(m => [m, mlab(m)]);
   modal("Export laporan gabungan · " + k, `<div class="f">
     <div class="w"><label>Anggota yang disertakan</label><div class="d-flex flex-wrap gap-2">${vteam().map(u => `<label class="d-flex align-items-center gap-1 mb-0 font-weight-500"><input type="checkbox" class="xg mr-1" value="${esc(u.n)}" checked> ${esc(u.n)} &middot; ${u.p}</label>`).join("")}</div></div>
     <div><label>Periode</label><select id="xp" class="form-control custom-select">${opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div>
-    <div><label>Format</label><select id="xf" class="form-control custom-select"><option value="Excel">Excel (.csv)</option><option value="PDF">PDF (cetak)</option><option value="Word">Word (.doc)</option></select></div>
+    <div><label>Format</label><select id="xf" class="form-control custom-select"><option value="Excel">${k == "Weekly" ? "Excel (.xlsx)" : "Excel (.csv)"}</option><option value="PDF">PDF (cetak)</option><option value="Word">Word (.doc)</option></select></div>
   </div><p class="text-muted mt-2">Nomor mulai ulang per posisi. Data mengikuti periode yang dipilih.</p>`,
   () => {
     const mem = [...document.querySelectorAll(".xg:checked")].map(x => x.value);
     if (!mem.length) { toast("Pilih minimal satu anggota"); return false; }
     const per = $("#xp").value, fmt = $("#xf").value, lab = (opts.find(o => o[0] == per) || [0, per])[1];
+    if (k == "Weekly" && fmt == "Excel") { expWeeklyXlsx(mem, per, "Semua"); return; }
     const secs = k == "Weekly" ? mem.map(u => weeklySec(u, per, "Semua")) : mem.flatMap(u => monthlySecs(u, per));
     outTable(fmt, k + " Report · " + lab, secs, k.toLowerCase() + "-report-" + slug(String(per)));
     toast("Laporan gabungan (" + mem.length + " anggota) diproses");
@@ -1475,7 +1573,8 @@ function expAna(fmt) {
 }
 
 /* ---------- Impor dari Excel / Google Sheets ---------- */
-const wkOfMonth = (m, n) => { let d = m + "-01"; while (parse(d).getUTCDay() != 6) d = addDays(d, 1); return addDays(d, 7 * (n - 1)); };
+// Sabtu awal "Week n" bulan m: Week 1 = minggu yang Rabu-nya Rabu pertama bulan itu.
+const wkOfMonth = (m, n) => { let d = m + "-01"; while (parse(d).getUTCDay() != 3) d = addDays(d, 1); return addDays(d, 7 * (n - 1) - 4); };
 function parseDate(s) {
   s = String(s || "").trim();
   let m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})\b/), y, mm, d;
@@ -1493,7 +1592,7 @@ function wmRows(rw, per) {
     if (wn == null) return { err, groups: [], bad: 0 };
     if (!c[1]) { bad++; continue; }
     const s = wkOfMonth(per, wn);
-    if (mk(s) != per) { bad++; continue; }
+    if (wkMonth(s) != per) { bad++; continue; }
     (g[s] = g[s] || []).push(c);
   }
   return { err: "", groups: Object.keys(g).sort().map(s => ({ s, c: g[s].length, rows: g[s] })), bad };
@@ -1685,31 +1784,56 @@ function restore(inp) {
 function resetDemo() { modal("Kembalikan data contoh?", '<p class="text-muted">Semua data saat ini akan diganti dengan data contoh. PIN semua akun kembali ke 1234.</p>', async () => { seed(); await ensurePins(); go("set"); toast("Data contoh dikembalikan"); }, "Hapus"); }
 function clearAll() { modal("Kosongkan semua data?", '<p class="text-muted">Seluruh aktivitas, dokumen, dan arsip akan dihapus permanen dari browser ini. Buat backup dulu bila perlu.</p>', () => { acts = []; docs = []; arch = []; mst = {}; nid = 1; prev = ""; go("set"); toast("Semua data dikosongkan"); }, "Hapus"); }
 
-/* ---------- Sinkron ke Google Sheets (satu arah: website â†’ spreadsheet) ---------- */
+/* ---------- Sinkron ke Google Sheets (satu arah: website -> spreadsheet Weekly Report) ----------
+   Setiap perangkat mengirim pekerjaan Daily Report milik user yang sedang login (yang sudah "Simpan Laporan")
+   ke Apps Script (apps-script.gs). Script menulis / memperbarui baris berdasarkan SYNC ID di tab bulan
+   (Nov'26, ...) pada blok Posisi + Week yang sesuai. Hanya perubahan sejak sinkron terakhir yang dikirim,
+   dan aktivitas yang dihapus dikirim sebagai daftar hapus. Data contoh & hasil impor tidak pernah dikirim. */
+// Diisi sekali setelah apps-script.gs di-deploy, supaya semua user langsung tersambung tanpa setting.
+// Catatan: nilai di sini bisa dilihat siapa pun yang membuka source situs.
+const SYNC_FROM = "2026-11-17";   // tanggal fitur sinkron mulai dipakai
+const SYNC_DEFAULT = {
+  url: "https://script.google.com/macros/s/AKfycbzCVaw5xf-G-YvT3Z0nOAUdhucCC9H0iG5TKJUoQy3X5FRJ7NOxCs9WUWjM8i1AvpA/exec",
+  wl: "https://docs.google.com/spreadsheets/d/1gFQgBuIYo_ebic-fP5tLGJgB7pOjW3of2PbwvIIOmwA/edit"
+};
 const SKEY = KEY + "-sync";
 const idOf = u => (String(u || "").match(/\/d\/([\w-]+)/) || [])[1] || "";
-const errText = e => e == "OTHER_DEVICE" ? "Sheet sedang disinkronkan dari perangkat lain. Klik Ambil alih untuk menimpa" : e == "TOKEN" ? "Kode rahasia tidak sama dengan TOKEN di script (atau script belum di-deploy ulang setelah diubah)" : "Gagal: " + e;
-let syncCfg = { wl: "", al: "", tab: "REKAP", url: "", token: "", auto: true, device: "", takeover: false, last: "", ok: null, msg: "" };
+const errText = e => "Gagal: " + e;
+let syncCfg = { wl: "", url: "", auto: true, last: "", ok: null, msg: "", sent: {}, delq: [], log: [] };
 try { Object.assign(syncCfg, JSON.parse(localStorage.getItem(SKEY) || "{}")); } catch (e) { /* abaikan */ }
-if (!syncCfg.device) syncCfg.device = newId();
-let syncT = 0, syncBusy = false, syncAgain = false, syncHash = "", syncTries = 0;
+["url", "wl"].forEach(k => { if (!syncCfg[k]) syncCfg[k] = SYNC_DEFAULT[k]; });
+delete syncCfg.token;   // versi lama memakai kode rahasia; sekarang tidak lagi
+if (!syncCfg.sent || typeof syncCfg.sent != "object" || Array.isArray(syncCfg.sent)) syncCfg.sent = {};
+if (!Array.isArray(syncCfg.delq)) syncCfg.delq = [];
+let syncT = 0, syncBusy = false, syncAgain = false, syncTries = 0, syncLastTry = 0;
 const syncStore = () => { try { localStorage.setItem(SKEY, JSON.stringify(syncCfg)); } catch (e) { /* abaikan */ } };
 syncStore();
 const hashStr = s => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) | 0; return x + ":" + s.length; };
 const TABM = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "AGS", "Sept", "Okt", "Nov", "Des"];
-function syncPayload() {
-  const kt = { open: "Berjalan", done: "Selesai", cancel: "Batal" };
-  // Aktivitas: hanya yang sudah "Simpan Laporan" dan bukan hasil impor (yang impor sudah ada di sheet). Masuk ke tab bulan sesuai Posisi + Week.
-  const E = acts.filter(a => a.sv && !a.imp).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.id - b.id);
-  return {
-    entries: E.map(a => { const w = wkK(a); return { id: String(a.id), u: a.u, pos: pos(a.u), tab: TABM[+w.slice(5, 7) - 1] + "'" + w.slice(2, 4), wk: wkNum(w), n: a.n, r: a.r, k: a.k, s: a.s, ke: a.ke }; }),
-    documents: { head: ["ID", "Bulan", "Judul", "Jenis", "Badan usaha", "Status", "Jenis status", "PIC", "Penyerahan", "Diterima", "Catatan"], rows: sortDocs(docs).map(d => [d.id, mlab(dmo(d)), d.t, d.j, d.bu, d.st, kt[sType(d.st)], d.o, d.sub, d.rcv, d.ct || ""]) }
-  };
+const SYNC_ST = { Done: "Closed", "On Progress": "On Progress", Hold: "Open" };   // sesuai tab Kamus
+const syncReady = () => !!(syncCfg.url && idOf(syncCfg.wl));
+function syncEntry(a) {
+  const w = wkK(a), wm = wkMonth(w);
+  return { key: a.g, u: a.u, pos: (POS_FULL[pos(a.u)] || pos(a.u)).toUpperCase(), tab: TABM[+wm.slice(5, 7) - 1] + "'" + wm.slice(2, 4), wk: wkNum(w), n: a.n, r: SYNC_ST[a.r] || a.r, k: a.k, s: a.s, ke: a.ke };
+}
+// Pekerjaan milik user ini yang perlu dikirim: punya SYNC ID, sudah disimpan, dan berubah sejak terakhir terkonfirmasi.
+function syncPending() {
+  if (!authed || !me || ro()) return { entries: [], del: [], hashes: {} };
+  const E = acts.filter(a => a.g && a.sv && !a.imp && a.u == me.n).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.id - b.id);
+  const entries = [], hashes = {};
+  E.forEach(a => { const en = syncEntry(a), h = hashStr(JSON.stringify(en)); hashes[a.g] = h; if (syncCfg.sent[a.g] != h) entries.push(en); });
+  return { entries, del: syncCfg.delq.slice(), hashes };
+}
+function syncQueueDel(a) {
+  if (!a || !a.g || !syncCfg.sent[a.g]) return;
+  delete syncCfg.sent[a.g];
+  if (!syncCfg.delq.includes(a.g)) syncCfg.delq.push(a.g);
+  syncStore();
 }
 function syncMsg(m, ok) {
   syncCfg.msg = m; syncCfg.ok = ok;
   if (ok) syncCfg.last = new Date().toLocaleString("id-ID");
-  syncCfg.log = [[new Date().toLocaleTimeString("id-ID"), ok === true ? "âœ“" : ok === false ? "âœ—" : "…", m], ...(syncCfg.log || [])].slice(0, 8);
+  syncCfg.log = [[new Date().toLocaleTimeString("id-ID"), ok === true ? "ok" : ok === false ? "x" : "…", m], ...(syncCfg.log || [])].slice(0, 8);
   syncStore();
   if (cur == "set") go("set", true);
 }
@@ -1744,90 +1868,94 @@ async function anonCheck() {
 async function confirmSync(stamp, tries = 10) {
   for (let i = 0; i < tries; i++) {
     await sleep(i ? 4000 : 2500);
-    try { const st = await jsonp({ action: "status", token: syncCfg.token }); if (st && (st.stamp == stamp || st.error == "TOKEN")) return st; } catch (e) { /* coba lagi */ }
+    try { const st = await jsonp({ action: "status", stamp }); if (st && st.stamp == stamp) return st; } catch (e) { /* coba lagi */ }
   }
   return null;
 }
 async function syncNow(manual) {
   const c = syncCfg;
-  if (!c.url || !c.token) { if (manual) toast("Isi alamat Web App dan kode rahasia dulu"); return; }
-  if (!idOf(c.wl) && !idOf(c.al)) { if (manual) toast("Isi link spreadsheet Weekly dan/atau Approval dulu"); return; }
+  if (!authed || ro()) return;
+  if (!c.url) { if (manual) toast("Alamat Web App belum diatur"); return; }
+  if (!idOf(c.wl)) { if (manual) toast("Link spreadsheet Weekly Report belum diatur"); return; }
   if (syncBusy) { syncAgain = true; return; }
-  syncBusy = true;
+  const p = syncPending();
+  if (!p.entries.length && !p.del.length) { if (manual) { syncMsg("Semua pekerjaan sudah tersinkron", true); toast(c.msg); } return; }
+  syncBusy = true; syncLastTry = Date.now();
   try {
-    const pl = syncPayload(), h = hashStr(JSON.stringify(pl)), stamp = newId();
-    formPost(c.url, { token: c.token, device: c.device, takeover: !!c.takeover, stamp, weeklyId: idOf(c.wl), approvalId: idOf(c.al), approvalTab: (c.tab || "").trim(), ...pl });
+    const stamp = newId();
+    formPost(c.url, { stamp, weeklyId: idOf(c.wl), entries: p.entries, del: p.del });
     const j = await confirmSync(stamp);
     if (j && j.ok === false) syncMsg(errText(j.error), false);
-    else if (j && j.ok) { c.takeover = false; syncHash = h; syncTries = 0; const bad = String(j.log || "").split("\n").filter(l => l.startsWith("âœ—") || /tidak ditemukan/.test(l)).slice(0, 2).join(" | "); syncMsg("Sinkron berhasil (" + j.a + " aktivitas, " + j.d + " dokumen)" + (bad ? ". Perhatian: " + bad : ""), true); }
+    else if (j && j.ok) {
+      const fail = Array.isArray(j.fail) ? j.fail : [];
+      p.entries.forEach(en => { if (!fail.includes(en.key)) c.sent[en.key] = p.hashes[en.key]; });
+      c.delq = c.delq.filter(k => !p.del.includes(k) || fail.includes(k));
+      const bad = String(j.log || "").split("\n").filter(Boolean);
+      syncTries = 0;
+      syncMsg("Sinkron berhasil (" + j.a + " pekerjaan ditulis, " + j.d + " dihapus)" + (bad.length ? ". Perhatian: " + bad.slice(0, 2).join(" | ") : ""), !fail.length);
+    }
     else if (await anonCheck()) syncMsg("Data terkirim tetapi belum terkonfirmasi setelah 40 detik. Cek spreadsheet atau menu Eksekusi di editor Apps Script", null);
-    else syncMsg("Web App tidak bisa diakses tanpa login Google. Deploy ulang dengan Akses = Siapa saja (bukan 'Siapa saja dengan Akun Google') lalu pilih Versi baru", false);
+    else syncMsg("Web App tidak bisa diakses tanpa login Google. Deploy ulang dengan Akses = Siapa saja lalu pilih Versi baru", false);
   } catch (e) { syncMsg("Gagal mengirim: " + (e && e.message ? e.message : e), false); }
   finally { syncBusy = false; }
-  if (syncCfg.ok === false && syncTries < 3 && !/Kode rahasia|perangkat lain|Link spreadsheet|Akses/.test(syncCfg.msg)) { syncTries++; setTimeout(() => syncNow(false), 30000); }
+  if (syncCfg.ok === false && syncTries < 3 && !/Akses|Link spreadsheet/.test(syncCfg.msg)) { syncTries++; setTimeout(() => syncNow(false), 30000); }
   if (manual) toast(syncCfg.msg);
   if (syncAgain) { syncAgain = false; schedSync(); }
 }
 function schedSync() {
-  if (!syncCfg.url || !syncCfg.token || !syncCfg.auto) return;
+  if (!syncReady() || !syncCfg.auto || !authed || !me || ro()) return;
   clearTimeout(syncT);
-  syncT = setTimeout(() => { if (hashStr(JSON.stringify(syncPayload())) != syncHash) syncNow(false); }, 3000);
+  syncT = setTimeout(() => {
+    if (syncCfg.ok === false && Date.now() - syncLastTry < 60000) return;   // jangan membanjiri saat sedang bermasalah
+    const p = syncPending();
+    if (p.entries.length || p.del.length) syncNow(false);
+  }, 3000);
 }
 function syncSaveCfg() {
   if (!lead()) return;
   const u = $("#sy-url").value.trim();
   if (u && !/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+\/|macros\/)s\/[\w-]+\/exec$/.test(u)) return toast("Alamat harus dari script.google.com dan berakhiran /exec");
-  const w = $("#sy-wl").value.trim(), a = $("#sy-al").value.trim();
-  if ((w && !idOf(w)) || (a && !idOf(a))) return toast("Link spreadsheet tidak valid. Salin dari kolom alamat browser");
-  syncCfg.wl = w; syncCfg.al = a; syncCfg.tab = $("#sy-tab") ? $("#sy-tab").value.trim() : syncCfg.tab; syncCfg.url = u; syncCfg.token = $("#sy-tk").value.trim(); syncCfg.auto = $("#sy-auto").value == "1"; syncCfg.takeover = true; syncHash = ""; syncStore();
+  const w = $("#sy-wl").value.trim();
+  if (w && !idOf(w)) return toast("Link spreadsheet tidak valid. Salin dari kolom alamat browser");
+  syncCfg.wl = w; syncCfg.url = u; syncCfg.auto = $("#sy-auto").value == "1"; syncTries = 0; syncStore();
   toast("Pengaturan disimpan"); syncNow(true);
 }
 async function syncTest() {
   const c = syncCfg;
-  if (!c.url || !c.token) return toast("Isi alamat Web App dan kode rahasia dulu");
-  if (!idOf(c.wl) && !idOf(c.al)) return toast("Isi link spreadsheet dulu");
+  if (!c.url) return toast("Isi alamat Web App dulu");
+  if (!idOf(c.wl)) return toast("Isi link spreadsheet dulu");
   toast("Menguji koneksi (bisa 20 detik)…");
   try {
-    const j = await jsonp({ action: "ping", token: c.token, w: idOf(c.wl), a: idOf(c.al), t: (c.tab || "").trim() });
-    const wN = j.weekly || "", aN = j.approval || "";
+    const j = await jsonp({ action: "ping", w: idOf(c.wl) });
     if (!j.ok) syncMsg(errText(j.error), false);
-    else if ((/approval|monitoring/i.test(wN) && !/weekly/i.test(wN)) || (/weekly/i.test(aN) && !/approval|monitoring/i.test(aN))) syncMsg("Link kemungkinan TERTUKAR: kolom Weekly berisi \"" + wN + "\", kolom Approval berisi \"" + aN + "\". Klik Tukar link", false);
     else {
       const stamp = newId();
-      formPost(c.url, { token: c.token, device: c.device, stamp, weeklyId: "", approvalId: "" });   // uji jalur kirim tanpa menulis apa pun
-      if (await confirmSync(stamp, 8)) syncMsg("Tes berhasil. Baca dan kirim data OK. Weekly: " + (wN || "-") + " · Approval: " + (aN || "-"), true);
-      else syncMsg("Bisa membaca Web App, tetapi pengiriman data gagal. Hampir pasti Akses belum 'Siapa saja': Deploy â†’ Kelola penerapan â†’ pensil â†’ Akses: Siapa saja â†’ Versi baru â†’ Deploy", false);
+      formPost(c.url, { stamp, weeklyId: "" });   // uji jalur kirim tanpa menulis apa pun
+      if (await confirmSync(stamp, 8)) syncMsg("Tes berhasil. Baca dan kirim data OK. Spreadsheet: " + (j.weekly || "-"), true);
+      else syncMsg("Bisa membaca Web App, tetapi pengiriman data gagal. Hampir pasti Akses belum 'Siapa saja': Deploy -> Kelola deployment -> pensil -> Akses: Siapa saja -> Versi baru -> Deploy", false);
     }
   } catch (e) { syncMsg("Tidak ada balasan dari Web App. Pastikan script sudah di-deploy ulang (Versi baru) dan Akses = Siapa saja. Buka alamat /exec di tab baru untuk memeriksa", false); }
   toast(syncCfg.msg);
 }
-function syncSwap() {
-  if (!lead()) return;
-  [syncCfg.wl, syncCfg.al] = [syncCfg.al, syncCfg.wl]; syncHash = ""; syncStore(); go("set"); toast("Link Weekly dan Approval ditukar. Klik Tes koneksi");
-}
-function syncTakeover() { if (!lead()) return; syncCfg.takeover = true; syncHash = ""; syncStore(); syncNow(true); }
 function syncCard() {
-  const c = syncCfg, st = c.ok === true ? ["Tersambung", "ok"] : c.ok === false ? ["Bermasalah", "er"] : [c.url ? (c.msg ? "Belum terkonfirmasi" : "Menunggu") : "Belum diatur", c.url ? "wn" : "mu"];
+  const c = syncCfg, ed = lead();
+  const st = !syncReady() ? ["Belum diatur", "mu"] : c.ok === true ? ["Tersambung", "ok"] : c.ok === false ? ["Bermasalah", "er"] : [c.msg ? "Belum terkonfirmasi" : "Menunggu", "wn"];
+  const p = syncPending(), pend = p.entries.length + p.del.length;
   return `<div class="card"><div class="card-header"><h3 class="card-title">Sinkron ke Google Sheets <span class="st st-${st[1]} ml-2"><i class="st-dot"></i>${st[0]}</span></h3></div><div class="card-body">
-<p class="text-muted">Aktivitas yang sudah <b>Simpan Laporan</b> dan perubahan dokumen otomatis disinkronkan ke Google Spreadsheet.</p>
-<div class="f">
+<p class="text-muted">Pekerjaan Daily Report yang sudah <b>Simpan Laporan</b> otomatis masuk ke spreadsheet Weekly Report, di tab bulan dan blok Posisi + Week yang sesuai.${pend ? ` <b>${pend} perubahan menunggu dikirim.</b>` : ""}</p>
+${ed ? `<div class="f">
   <div class="w"><label>Link spreadsheet Weekly Report</label><input id="sy-wl" class="form-control" value="${esc(c.wl)}" placeholder="https://docs.google.com/spreadsheets/d/.../edit"></div>
-  <div class="w"><label>Link spreadsheet Monitoring Approval</label><input id="sy-al" class="form-control" value="${esc(c.al)}" placeholder="https://docs.google.com/spreadsheets/d/.../edit"></div>
-  <div><label>Tab Approval</label><input id="sy-tab" class="form-control" value="${esc(c.tab)}" placeholder="REKAP"></div>
   <div class="w"><label>Alamat Web App (berakhiran /exec)</label><input id="sy-url" class="form-control" value="${esc(c.url)}" placeholder="https://script.google.com/macros/s/.../exec"></div>
-  <div><label>Kode rahasia</label><input id="sy-tk" class="form-control" type="password" value="${esc(c.token)}" autocomplete="off"></div>
   <div><label>Pengiriman</label><select id="sy-auto" class="form-control custom-select"><option value="1" ${c.auto?"selected":""}>Otomatis</option><option value="0" ${c.auto?"":"selected"}>Manual</option></select></div>
-</div>
+</div>` : ""}
 <div class="d-flex flex-wrap gap-2 mt-3">
-  <button type="button" class="btn btn-primary" onclick="syncSaveCfg()">Simpan &amp; Sinkronkan</button>
-  <button type="button" class="btn btn-default" onclick="syncTest()">Tes Koneksi</button>
-  <button type="button" class="btn btn-default" onclick="syncSwap()">Tukar Link</button>
-  <button type="button" class="btn btn-default" onclick="syncNow(true)">Sinkronkan Sekarang</button>
-  <button type="button" class="btn btn-default" onclick="syncTakeover()">Ambil Alih</button>
+  ${ed ? `<button type="button" class="btn btn-primary" onclick="syncSaveCfg()">Simpan &amp; Sinkronkan</button>
+  <button type="button" class="btn btn-default" onclick="syncTest()">Tes Koneksi</button>` : ""}
+  <button type="button" class="btn ${ed ? "btn-default" : "btn-primary"}" onclick="syncNow(true)">Sinkronkan Sekarang</button>
 </div>
 <p class="text-muted mt-2" style="font-size:.8rem">${c.msg?esc(c.msg)+". ":""}${c.last?"Terakhir berhasil: "+esc(c.last):""}</p>
-<details class="more"><summary>Riwayat sinkron (${(c.log||[]).length})</summary>${(c.log||[]).map(l=>`<div class="text-muted" style="font-size:.8rem">${esc(l[0])} · ${l[1]=="âœ“"?"Berhasil":l[1]=="âœ—"?"Gagal":"Proses"} · ${esc(l[2])}</div>`).join("")||'<div class="text-muted">Belum ada riwayat.</div>'}</details>
-<details class="more"><summary>Petunjuk konfigurasi</summary><ol class="text-muted" style="font-size:.8rem"><li>Buka <b>script.google.com</b> â†’ <b>Proyek baru</b>.</li><li>Tempel seluruh isi file <b>apps-script.gs</b>, sesuaikan token rahasia, lalu simpan.</li><li>Deploy sebagai Aplikasi web dengan akses Siapa saja.</li><li>Salin URL Aplikasi web dan masukkan pada pengaturan di atas.</li></ol></details>
+<details class="more"><summary>Riwayat sinkron (${(c.log||[]).length})</summary>${(c.log||[]).map(l=>`<div class="text-muted" style="font-size:.8rem">${esc(l[0])} · ${l[1]=="ok"?"Berhasil":l[1]=="x"?"Gagal":"Proses"} · ${esc(l[2])}</div>`).join("")||'<div class="text-muted">Belum ada riwayat.</div>'}</details>
+${ed ? `<details class="more"><summary>Petunjuk konfigurasi</summary><ol class="text-muted" style="font-size:.8rem"><li>Buka spreadsheet Weekly Report → <b>Ekstensi → Apps Script</b>.</li><li>Tempel seluruh isi file <b>apps-script.gs</b>, lalu simpan.</li><li><b>Deploy → Deployment baru → Aplikasi web</b>, Jalankan sebagai: Saya, Akses: Siapa saja.</li><li>Salin URL <b>/exec</b> ke kolom di atas, lalu klik Tes Koneksi. Agar semua user langsung tersambung, isi juga <b>SYNC_DEFAULT</b> di assets/app.js.</li></ol></details>` : ""}
 </div></div>`;
 }
 
@@ -1838,6 +1966,9 @@ function syncCard() {
   await ensurePins();
   TODAY = todayStr();
   acts.forEach(a => { if (!a.sv && a.d < TODAY) a.sv = 1; });  // draft hari lampau otomatis tersimpan
+  // Pekerjaan yang diinput sebelum fitur sinkron aktif (versi lama, belum punya SYNC ID) ikut dikirim.
+  // Data contoh (7-10 Nov) dan hasil impor tidak disentuh.
+  acts.forEach(a => { if (!a.g && !a.imp && a.d >= SYNC_FROM) a.g = newId(); });
   fm = mk(TODAY);
   applyTheme();
   if (window.jQuery) jQuery(document).on("shown.bs.tab", () => charts.forEach(c => c.resize()));
