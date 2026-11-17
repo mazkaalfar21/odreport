@@ -884,6 +884,8 @@ label, .form-label, .col-form-label {
 }
 
 .form-control:focus, .custom-select:focus {
+  background-color: var(--surface);
+  color: var(--gray-950) !important;
   border-color: var(--primary-600) !important;
   box-shadow: var(--focus-ring) !important;
   outline: 0;
@@ -1341,8 +1343,17 @@ body.sidebar-mini .modal:not(.modal-center) .modal-footer { flex-shrink: 0; }
 .wsec-tbl .table thead th { position: sticky; top: 0; z-index: 1; }
 
 /* Catatan kendala/solusi weekly */
-.wk-note { display: flex; gap: 8px; margin-top: .375rem; font-size: .8125rem; color: var(--gray-500); line-height: 1.5; }
-.wk-note-label { font-weight: 600; color: var(--gray-950); white-space: nowrap; min-width: 60px; flex-shrink: 0; }
+.wk-dd-cell { width: 18%; min-width: 150px; max-width: 240px; vertical-align: top; }
+.wk-dd { font-size: .8125rem; color: var(--gray-500); line-height: 1.5; }
+.wk-dd summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; user-select: none; }
+.wk-dd summary::-webkit-details-marker { display: none; }
+.wk-dd summary::after { content: ""; flex-shrink: 0; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .15s; }
+.wk-dd[open] summary::after { transform: rotate(-135deg) translateY(-1px); }
+.wk-dd summary:hover { color: var(--gray-950); }
+.wk-dd-prev { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-dd[open] .wk-dd-prev { display: none; }
+.wk-dd[open] summary::before { content: "Tutup"; flex: 1; font-weight: 500; }
+.wk-dd-body { margin-top: .25rem; color: var(--gray-950); white-space: pre-wrap; word-break: break-word; }
 
 /* Riwayat accordion */
 .hist-details { border-bottom: 1px solid var(--ring); padding: .5rem 0; }
