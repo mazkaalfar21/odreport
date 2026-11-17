@@ -1794,15 +1794,15 @@ function clearAll() { modal("Kosongkan semua data?", '<p class="text-muted">Selu
 const SYNC_FROM = "2026-11-17";   // tanggal fitur sinkron mulai dipakai
 const SYNC_DEFAULT = {
   url: "https://script.google.com/macros/s/AKfycbzCVaw5xf-G-YvT3Z0nOAUdhucCC9H0iG5TKJUoQy3X5FRJ7NOxCs9WUWjM8i1AvpA/exec",
-  token: "memek",    // sama dengan TOKEN di apps-script.gs
   wl: "https://docs.google.com/spreadsheets/d/1gFQgBuIYo_ebic-fP5tLGJgB7pOjW3of2PbwvIIOmwA/edit"
 };
 const SKEY = KEY + "-sync";
 const idOf = u => (String(u || "").match(/\/d\/([\w-]+)/) || [])[1] || "";
-const errText = e => e == "TOKEN" ? "Kode rahasia tidak sama dengan TOKEN di apps-script.gs (atau script belum di-deploy ulang setelah diubah)" : "Gagal: " + e;
-let syncCfg = { wl: "", url: "", token: "", auto: true, last: "", ok: null, msg: "", sent: {}, delq: [], log: [] };
+const errText = e => "Gagal: " + e;
+let syncCfg = { wl: "", url: "", auto: true, last: "", ok: null, msg: "", sent: {}, delq: [], log: [] };
 try { Object.assign(syncCfg, JSON.parse(localStorage.getItem(SKEY) || "{}")); } catch (e) { /* abaikan */ }
-["url", "token", "wl"].forEach(k => { if (!syncCfg[k]) syncCfg[k] = SYNC_DEFAULT[k]; });
+["url", "wl"].forEach(k => { if (!syncCfg[k]) syncCfg[k] = SYNC_DEFAULT[k]; });
+delete syncCfg.token;   // versi lama memakai kode rahasia; sekarang tidak lagi
 if (!syncCfg.sent || typeof syncCfg.sent != "object" || Array.isArray(syncCfg.sent)) syncCfg.sent = {};
 if (!Array.isArray(syncCfg.delq)) syncCfg.delq = [];
 let syncT = 0, syncBusy = false, syncAgain = false, syncTries = 0, syncLastTry = 0;
@@ -1811,7 +1811,7 @@ syncStore();
 const hashStr = s => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) | 0; return x + ":" + s.length; };
 const TABM = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "AGS", "Sept", "Okt", "Nov", "Des"];
 const SYNC_ST = { Done: "Closed", "On Progress": "On Progress", Hold: "Open" };   // sesuai tab Kamus
-const syncReady = () => !!(syncCfg.url && syncCfg.token && idOf(syncCfg.wl));
+const syncReady = () => !!(syncCfg.url && idOf(syncCfg.wl));
 function syncEntry(a) {
   const w = wkK(a), wm = wkMonth(w);
   return { key: a.g, u: a.u, pos: (POS_FULL[pos(a.u)] || pos(a.u)).toUpperCase(), tab: TABM[+wm.slice(5, 7) - 1] + "'" + wm.slice(2, 4), wk: wkNum(w), n: a.n, r: SYNC_ST[a.r] || a.r, k: a.k, s: a.s, ke: a.ke };
@@ -1868,14 +1868,14 @@ async function anonCheck() {
 async function confirmSync(stamp, tries = 10) {
   for (let i = 0; i < tries; i++) {
     await sleep(i ? 4000 : 2500);
-    try { const st = await jsonp({ action: "status", token: syncCfg.token, stamp }); if (st && (st.stamp == stamp || st.error == "TOKEN")) return st; } catch (e) { /* coba lagi */ }
+    try { const st = await jsonp({ action: "status", stamp }); if (st && st.stamp == stamp) return st; } catch (e) { /* coba lagi */ }
   }
   return null;
 }
 async function syncNow(manual) {
   const c = syncCfg;
   if (!authed || ro()) return;
-  if (!c.url || !c.token) { if (manual) toast("Alamat Web App dan kode rahasia belum diatur"); return; }
+  if (!c.url) { if (manual) toast("Alamat Web App belum diatur"); return; }
   if (!idOf(c.wl)) { if (manual) toast("Link spreadsheet Weekly Report belum diatur"); return; }
   if (syncBusy) { syncAgain = true; return; }
   const p = syncPending();
@@ -1883,7 +1883,7 @@ async function syncNow(manual) {
   syncBusy = true; syncLastTry = Date.now();
   try {
     const stamp = newId();
-    formPost(c.url, { token: c.token, stamp, weeklyId: idOf(c.wl), entries: p.entries, del: p.del });
+    formPost(c.url, { stamp, weeklyId: idOf(c.wl), entries: p.entries, del: p.del });
     const j = await confirmSync(stamp);
     if (j && j.ok === false) syncMsg(errText(j.error), false);
     else if (j && j.ok) {
@@ -1898,7 +1898,7 @@ async function syncNow(manual) {
     else syncMsg("Web App tidak bisa diakses tanpa login Google. Deploy ulang dengan Akses = Siapa saja lalu pilih Versi baru", false);
   } catch (e) { syncMsg("Gagal mengirim: " + (e && e.message ? e.message : e), false); }
   finally { syncBusy = false; }
-  if (syncCfg.ok === false && syncTries < 3 && !/Kode rahasia|Akses|Link spreadsheet/.test(syncCfg.msg)) { syncTries++; setTimeout(() => syncNow(false), 30000); }
+  if (syncCfg.ok === false && syncTries < 3 && !/Akses|Link spreadsheet/.test(syncCfg.msg)) { syncTries++; setTimeout(() => syncNow(false), 30000); }
   if (manual) toast(syncCfg.msg);
   if (syncAgain) { syncAgain = false; schedSync(); }
 }
@@ -1917,20 +1917,20 @@ function syncSaveCfg() {
   if (u && !/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+\/|macros\/)s\/[\w-]+\/exec$/.test(u)) return toast("Alamat harus dari script.google.com dan berakhiran /exec");
   const w = $("#sy-wl").value.trim();
   if (w && !idOf(w)) return toast("Link spreadsheet tidak valid. Salin dari kolom alamat browser");
-  syncCfg.wl = w; syncCfg.url = u; syncCfg.token = $("#sy-tk").value.trim(); syncCfg.auto = $("#sy-auto").value == "1"; syncTries = 0; syncStore();
+  syncCfg.wl = w; syncCfg.url = u; syncCfg.auto = $("#sy-auto").value == "1"; syncTries = 0; syncStore();
   toast("Pengaturan disimpan"); syncNow(true);
 }
 async function syncTest() {
   const c = syncCfg;
-  if (!c.url || !c.token) return toast("Isi alamat Web App dan kode rahasia dulu");
+  if (!c.url) return toast("Isi alamat Web App dulu");
   if (!idOf(c.wl)) return toast("Isi link spreadsheet dulu");
   toast("Menguji koneksi (bisa 20 detik)…");
   try {
-    const j = await jsonp({ action: "ping", token: c.token, w: idOf(c.wl) });
+    const j = await jsonp({ action: "ping", w: idOf(c.wl) });
     if (!j.ok) syncMsg(errText(j.error), false);
     else {
       const stamp = newId();
-      formPost(c.url, { token: c.token, stamp, weeklyId: "" });   // uji jalur kirim tanpa menulis apa pun
+      formPost(c.url, { stamp, weeklyId: "" });   // uji jalur kirim tanpa menulis apa pun
       if (await confirmSync(stamp, 8)) syncMsg("Tes berhasil. Baca dan kirim data OK. Spreadsheet: " + (j.weekly || "-"), true);
       else syncMsg("Bisa membaca Web App, tetapi pengiriman data gagal. Hampir pasti Akses belum 'Siapa saja': Deploy -> Kelola deployment -> pensil -> Akses: Siapa saja -> Versi baru -> Deploy", false);
     }
@@ -1946,7 +1946,6 @@ function syncCard() {
 ${ed ? `<div class="f">
   <div class="w"><label>Link spreadsheet Weekly Report</label><input id="sy-wl" class="form-control" value="${esc(c.wl)}" placeholder="https://docs.google.com/spreadsheets/d/.../edit"></div>
   <div class="w"><label>Alamat Web App (berakhiran /exec)</label><input id="sy-url" class="form-control" value="${esc(c.url)}" placeholder="https://script.google.com/macros/s/.../exec"></div>
-  <div><label>Kode rahasia</label><input id="sy-tk" class="form-control" type="password" value="${esc(c.token)}" autocomplete="off"></div>
   <div><label>Pengiriman</label><select id="sy-auto" class="form-control custom-select"><option value="1" ${c.auto?"selected":""}>Otomatis</option><option value="0" ${c.auto?"":"selected"}>Manual</option></select></div>
 </div>` : ""}
 <div class="d-flex flex-wrap gap-2 mt-3">
@@ -1956,7 +1955,7 @@ ${ed ? `<div class="f">
 </div>
 <p class="text-muted mt-2" style="font-size:.8rem">${c.msg?esc(c.msg)+". ":""}${c.last?"Terakhir berhasil: "+esc(c.last):""}</p>
 <details class="more"><summary>Riwayat sinkron (${(c.log||[]).length})</summary>${(c.log||[]).map(l=>`<div class="text-muted" style="font-size:.8rem">${esc(l[0])} · ${l[1]=="ok"?"Berhasil":l[1]=="x"?"Gagal":"Proses"} · ${esc(l[2])}</div>`).join("")||'<div class="text-muted">Belum ada riwayat.</div>'}</details>
-${ed ? `<details class="more"><summary>Petunjuk konfigurasi</summary><ol class="text-muted" style="font-size:.8rem"><li>Buka spreadsheet Weekly Report → <b>Ekstensi → Apps Script</b>.</li><li>Tempel seluruh isi file <b>apps-script.gs</b>, ganti <b>TOKEN</b>, lalu simpan.</li><li><b>Deploy → Deployment baru → Aplikasi web</b>, Jalankan sebagai: Saya, Akses: Siapa saja.</li><li>Salin URL <b>/exec</b> dan kode rahasia ke kolom di atas, lalu klik Tes Koneksi. Agar semua user langsung tersambung, isi juga <b>SYNC_DEFAULT</b> di assets/app.js.</li></ol></details>` : ""}
+${ed ? `<details class="more"><summary>Petunjuk konfigurasi</summary><ol class="text-muted" style="font-size:.8rem"><li>Buka spreadsheet Weekly Report → <b>Ekstensi → Apps Script</b>.</li><li>Tempel seluruh isi file <b>apps-script.gs</b>, lalu simpan.</li><li><b>Deploy → Deployment baru → Aplikasi web</b>, Jalankan sebagai: Saya, Akses: Siapa saja.</li><li>Salin URL <b>/exec</b> ke kolom di atas, lalu klik Tes Koneksi. Agar semua user langsung tersambung, isi juga <b>SYNC_DEFAULT</b> di assets/app.js.</li></ol></details>` : ""}
 </div></div>`;
 }
 

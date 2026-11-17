@@ -98,14 +98,14 @@ Minggu mengikuti aturan template: Sabtu–Jumat, masuk ke bulan hari Rabu-nya.
 
 Pemasangan (sekali, oleh pemilik spreadsheet):
 1. Buka spreadsheet Weekly Report → **Ekstensi → Apps Script**.
-2. Hapus isi `Code.gs`, tempel seluruh isi `apps-script.gs`, ganti `TOKEN` dengan kode rahasia buatan sendiri, lalu Simpan.
+2. Hapus isi `Code.gs`, tempel seluruh isi `apps-script.gs`, lalu Simpan.
 3. **Deploy → Deployment baru → Aplikasi web**: Jalankan sebagai **Saya**, Akses **Siapa saja** → Deploy → izinkan akses → salin URL berakhiran `/exec`.
-4. Di `assets/app.js`, isi `SYNC_DEFAULT` (`url` = URL /exec, `token` = TOKEN, `wl` = link spreadsheet), commit & push.
+4. Di `assets/app.js`, isi `SYNC_DEFAULT` (`url` = URL /exec, `wl` = link spreadsheet), commit & push.
    Semua user langsung tersambung tanpa setting. (Alternatif: isi lewat **Pengaturan → Sinkron ke Google Sheets** di akun OD Leader, hanya berlaku di perangkat itu.)
 5. Di akun OD Leader klik **Tes Koneksi**. Status sinkron setiap user terlihat di menu Pengaturan masing-masing.
 
 Setiap kali `apps-script.gs` diubah: **Deploy → Kelola deployment → pensil → Versi: Versi baru → Deploy** (URL tetap sama).
-Catatan: `SYNC_DEFAULT` ada di kode situs, jadi kode rahasia bisa dilihat siapa pun yang membuka source situs.
+Catatan: tidak memakai kode rahasia. Siapa pun yang tahu URL /exec (terlihat di kode situs dan repo) bisa mengirim baris ke spreadsheet.
 
 ## Catatan
 - Zona waktu tanggal: **Asia/Jakarta**. Minggu dihitung **Sabtu–Jumat**; "Week N" mengikuti bulan tanggal Sabtu awal minggu.

@@ -6,16 +6,17 @@
  *
  * Cara pasang (sekali saja, oleh pemilik spreadsheet):
  *  1. Buka spreadsheet Weekly Report → Ekstensi → Apps Script.
- *  2. Hapus isi Code.gs, tempel seluruh file ini, ganti TOKEN di bawah, lalu Simpan.
+ *  2. Hapus isi Code.gs, tempel seluruh file ini, lalu Simpan.
  *  3. Deploy → Deployment baru → jenis "Aplikasi web":
  *       Jalankan sebagai : Saya
  *       Yang memiliki akses : Siapa saja
  *     Izinkan akses saat diminta, lalu salin URL yang berakhiran /exec.
- *  4. Masukkan URL /exec + TOKEN + link spreadsheet ke SYNC_DEFAULT di assets/app.js
+ *  4. Masukkan URL /exec + link spreadsheet ke SYNC_DEFAULT di assets/app.js
  *     (atau lewat Pengaturan → Sinkron ke Google Sheets di akun OD Leader).
  *  Setiap kali file ini diubah: Deploy → Kelola deployment → pensil → Versi: Versi baru → Deploy.
  *
  * Catatan:
+ *  - Tanpa kode rahasia: siapa pun yang tahu URL /exec bisa mengirim baris ke spreadsheet ini.
  *  - Kolom H ("SYNC ID", disembunyikan) dipakai untuk mengenali baris yang dibuat website,
  *    sehingga edit memperbarui baris yang sama dan hapus mengosongkan isi barisnya.
  *    Baris lama yang diketik manual (tanpa SYNC ID) tidak pernah diubah.
@@ -25,8 +26,6 @@
  *  - Tab bulan yang belum ada dibuat otomatis dengan menyalin struktur tab bulan terakhir
  *    (posisi, blok week, baris kosong) lalu mengosongkan isi pekerjaannya.
  */
-
-const TOKEN = "GANTI-DENGAN-KODE-RAHASIA";
 
 const KEY_COL = 8;   // kolom H
 const TAB_RE = /^(Jan|Feb|Mar|Apr|Mei|Jun|Jul|Agt|Ags|AGS|Sep|Sept|Okt|Nov|Des)'\d{2}$/i;
@@ -43,8 +42,7 @@ function out_(obj, cb) {
 
 function doGet(e) {
   const p = (e && e.parameter) || {}, cb = p.callback;
-  if (p.ping) return out_({ ok: true }, cb);                       // cek akses tanpa token
-  if (p.token !== TOKEN) return out_({ ok: false, error: "TOKEN", stamp: p.stamp || "" }, cb);
+  if (p.ping) return out_({ ok: true }, cb);                       // cek akses
   if (p.action == "status") {
     const v = CacheService.getScriptCache().get("st:" + p.stamp);
     return out_(v ? JSON.parse(v) : { ok: null, pending: true }, cb);
@@ -68,7 +66,6 @@ function doPost(e) {
     if (stamp) CacheService.getScriptCache().put("st:" + stamp, JSON.stringify(r), 21600);
     return out_(r);
   };
-  if (body.token !== TOKEN) return done({ ok: false, error: "TOKEN" });
   if (!body.weeklyId) return done({ ok: true, a: 0, d: 0, log: "" });   // tes jalur kirim, tidak menulis apa pun
 
   const lock = LockService.getScriptLock();
