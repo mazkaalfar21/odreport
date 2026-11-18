@@ -988,6 +988,7 @@ select option, select optgroup {
 .uname { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8125rem !important; }
 
 .table td select.form-control-sm {
+  width: auto;
   height: 30px !important;
   font-size: .8125rem !important;
   padding: .2rem .5rem !important;
@@ -995,7 +996,8 @@ select option, select optgroup {
 }
 
 /* Baris pemisah bulan di Approval */
-.table tbody tr td[colspan="5"] {
+.table tbody tr td[colspan="5"],
+.table tbody tr td.appr-month {
   background: var(--gray-50) !important;
   font-size: .75rem !important;
   font-weight: 600 !important;
@@ -1546,9 +1548,6 @@ a.sec-card:hover { border-color: var(--primary-500); color: inherit; text-decora
 .dash-pager { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .dash-pager .btn { min-width: 32px; }
 .dash-pager .btn:disabled { opacity: .45; }
-
-/* ── Viewer: sembunyikan kontrol edit ──────────────────────────── */
-body.ro .edit { display: none !important; }
 
 /* ── Fade in antar halaman ─────────────────────────────────────── */
 .fade-in { animation: fadeIn .2s ease-out; }

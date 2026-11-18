@@ -63,10 +63,10 @@ const pages = [
 ];
 const NAV = [["", ["dash"]], ["Laporan", ["daily", "weekly", "monthly"]], ["Dokumen", ["appr"]], ["Sistem", ["usr", "set"]]];
 const guide = () => "";
-const ROLES = ["OD Leader", "OD Staff", "Viewer"];
-const DEFAULT_USERS = [{ n: "Sekar Ayuning Srikandi", p: "OD Leader", u: "sekar" }, { n: "Rizal Hamdi", p: "OD Staff", u: "rizal" }, { n: "Visitor", p: "Viewer", u: "visitor" }];
+const ROLES = ["OD Leader", "OD Staff"];
+const DEFAULT_USERS = [{ n: "Sekar Ayuning Srikandi", p: "OD Leader", u: "sekar" }, { n: "Rizal Hamdi", p: "OD Staff", u: "rizal" }];
 let users = DEFAULT_USERS.map(u => ({ ...u })), team = [];
-const syncTeam = () => { team = users.filter(u => u.p != "Viewer"); };
+const syncTeam = () => { team = users.slice(); };
 syncTeam();
 const JN = ["IK", "JD", "SOP", "SE", "MEMO", "SA", "Dokumen Lainnya"];
 const BU = ["CV CS", "CV CS AUTO EV", "CV TOP", "PT SMI", "PT MSI", "PT CSN", "RISM"];
@@ -120,7 +120,7 @@ const pinOk = p => /^\d{4,8}$/.test(p);
 const unameOk = s => /^[a-z0-9._-]{3,20}$/.test(s);
 const slugUser = n => String(n).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
 const defOwner = j => { const t = users.find(u => u.p == (j == "JD" || j == "IK" ? "OD Staff" : "OD Leader")) || team[0]; return t ? t.n : ""; };
-const picFor = j => { const k = JN.includes(j) ? j : "Dokumen Lainnya", o = owners[k]; return users.some(u => u.n == o && u.p != "Viewer") ? o : defOwner(k); };
+const picFor = j => { const k = JN.includes(j) ? j : "Dokumen Lainnya", o = owners[k]; return users.some(u => u.n == o) ? o : defOwner(k); };
 
 /* ---------- State ---------- */
 let TODAY = todayStr();
@@ -210,7 +210,6 @@ function load() {
 const sc = s => ({ Done: "ok", Released: "ok", Approved: "ok", Hold: "wn", Revision: "wn", Draft: "wn" }[s] || "");
 const pos = n => (users.find(u => u.n == n) || { p: "-" }).p;
 const saved = () => acts.filter(a => a.sv && (canSeeAll() || a.u == me.n));
-const ro = () => me.p == "Viewer";
 const canSeeAll = () => me.p != "OD Staff";
 const vteam = () => canSeeAll() ? team : team.filter(u => u.n == me.n);
 const vdocs = () => canSeeAll() ? docs : docs.filter(d => d.o == me.n);
@@ -389,7 +388,7 @@ async function doLogin() {
   const h = await pinHash(p);
   if (h != u.pin) { err.textContent = "PIN salah. Coba lagi."; $("#li-p").value = ""; $("#li-p").focus(); return; }
   me = u; authed = true;
-  fp = me.p == "Viewer" ? team[0].n : me.n;
+  fp = me.n;
   prev = "";
   try { localStorage.setItem(KEY + "-me", me.n); } catch (e) { /* abaikan */ }
   $("#login").hidden = true;
@@ -422,7 +421,6 @@ function go(p, ns) {
   document.title = pg[1] + " · OD Report";
 
   const cr = $("#crumb"); if (cr) cr.textContent = pg[1];
-  document.body.classList.toggle("ro", ro());
   acct();
   bell();
 
@@ -446,8 +444,8 @@ function go(p, ns) {
 function attention() {
   const s = stat(saved().filter(a => mo(a) == mk(TODAY)));
   const att = [];
-  if (!ro() && mineD().length) att.push([mineD().length + " aktivitas belum disimpan", "Buka Daily Report", "daily"]);
-  if (!ro() && !acts.some(a => a.u == me.n && a.d == TODAY)) att.push(["Laporan hari ini belum diisi", "Isi sekarang", "daily"]);
+  if (mineD().length) att.push([mineD().length + " aktivitas belum disimpan", "Buka Daily Report", "daily"]);
+  if (!acts.some(a => a.u == me.n && a.d == TODAY)) att.push(["Laporan hari ini belum diisi", "Isi sekarang", "daily"]);
   if (s.h) att.push([s.h + " pekerjaan berstatus Hold", "Lihat Weekly Report", "weekly"]);
   const late = vdocs().filter(d => sType(d.st) == "open" && d.sd && d.sd != "-" && d.sd < TODAY);
   if (late.length) att.push([late.length + " dokumen berjalan melewati target penyerahan", "Lihat Approval", "appr"]);
@@ -644,7 +642,7 @@ const V = {
 
     // Data table bertab + pagination (10 baris/halaman)
     const PER = 10;
-    // Leader/Viewer melihat aktivitas semua orang: kelompokkan per orang (urutan tim), lalu terbaru di atas
+    // Leader melihat aktivitas semua orang: kelompokkan per orang (urutan tim), lalu terbaru di atas
     const grpActs = canSeeAll() && new Set(wl.map(a => a.u)).size > 1;
     const uIdx = n => { const i = team.findIndex(u => u.n == n); return i < 0 ? team.length : i; };
     const actsSorted = wl.slice().sort((a, b) =>
@@ -658,7 +656,7 @@ const V = {
     if (dashPage >= np) dashPage = np - 1;
     if (dashPage < 0) dashPage = 0;
     const slice = rows.slice(dashPage * PER, dashPage * PER + PER);
-    const canEdit = a => !ro() && (a.u == me.n || lead());
+    const canEdit = a => a.u == me.n || lead();
 
     const actStBadge = r => {
       const m = { Done: ["ok", "check-circle"], Hold: ["wn", "pause-circle"] }[r] || ["ac", "circle-notch"];
@@ -697,7 +695,7 @@ const V = {
             <button type="button" class="${dashTab == "acts" ? "on" : ""}" onclick="setDashTab('acts')">Aktivitas<span class="dash-tab-count">${actsSorted.length}</span></button>
             <button type="button" class="${dashTab == "docs" ? "on" : ""}" onclick="setDashTab('docs')">Dokumen<span class="dash-tab-count">${docsSorted.length}</span></button>
           </div>
-          ${ro() ? "" : `<button type="button" class="btn btn-default btn-sm ml-auto" onclick="go('daily')"><i class="fas fa-plus"></i>Tambah Laporan</button>`}
+          <button type="button" class="btn btn-default btn-sm ml-auto" onclick="go('daily')"><i class="fas fa-plus"></i>Tambah Laporan</button>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -726,7 +724,7 @@ const V = {
       ${tableCard}`;
 
     return pageWrap("Dashboard", "Ringkasan aktivitas tim, progres penyelesaian, dan status dokumen Organization Development.",
-      `<span class="text-muted small mr-2 d-none d-md-inline">${fdl(TODAY)}</span>` + (ro() ? "" : `<a href="#" class="btn btn-primary" onclick="go('daily');return false;"><i class="fas fa-plus"></i>Tambah Laporan</a>`),
+      `<span class="text-muted small mr-2 d-none d-md-inline">${fdl(TODAY)}</span>` + `<a href="#" class="btn btn-primary" onclick="go('daily');return false;"><i class="fas fa-plus"></i>Tambah Laporan</a>`,
       body);
   },
 
@@ -842,7 +840,7 @@ const V = {
                         <span>${esc(a.n)}</span>
                         ${actBadge(a.r).replace('<span class="st', '<span class="st ml-1')}
                       </div>
-                      ${(lead() || a.u == me.n) && !ro() ? `<div class="edit d-flex gap-1 ml-2">
+                      ${lead() || a.u == me.n ? `<div class="edit d-flex gap-1 ml-2">
                         <button type="button" class="btn btn-xs btn-default" onclick="ed(${a.id})">Edit</button>
                         <button type="button" class="btn btn-xs btn-danger" onclick="del(${a.id})">Hapus</button>
                       </div>` : ""}
@@ -1007,15 +1005,12 @@ const V = {
 
     let tableRows = "", lastM = "";
     shown.forEach(d => {
-      const ix = docs.indexOf(d), can = canDoc(d) && !ro(), m = dmo(d);
+      const ix = docs.indexOf(d), can = canDoc(d), m = dmo(d);
       const rc = acts.filter(a => a.dc == d.id && a.sv).length;
       if (ds != "open" && m != lastM) {
         lastM = m;
-        tableRows += `<tr><td colspan="5" style="background:var(--gray-50);font-size:.75rem;font-weight:600;color:var(--gray-500);padding:.5rem 1.25rem">${mlab(m)}</td></tr>`;
+        tableRows += `<tr><td colspan="4" class="appr-month">${mlab(m)}</td></tr>`;
       }
-      const pic = me.p == "OD Leader"
-        ? `<select class="form-control form-control-sm custom-select" style="min-width:120px" onchange="setOwner(${ix},this.value)">${team.map(t=>`<option ${t.n==d.o?"selected":""}>${esc(t.n)}</option>`).join("")}</select>`
-        : `<span>${esc(d.o)}</span>`;
       const status = can
         ? `<select class="form-control form-control-sm custom-select" style="min-width:110px" onchange="setSt(${ix},this.value)">${ST.map(x=>`<option ${x==d.st?"selected":""}>${esc(x)}</option>`).join("")}</select>`
         : docBadge(d.st);
@@ -1030,7 +1025,6 @@ const V = {
           <span class="badge badge-secondary">${esc(d.j)}</span>
           <div class="cell-sub">${esc(d.bu)}</div>
         </td>
-        <td>${pic}</td>
         <td style="white-space:nowrap">
           <div>${esc(d.sub)}</div>
           <div class="cell-sub">${esc(d.rcv)}</div>
@@ -1064,7 +1058,6 @@ const V = {
             <thead><tr>
               <th>Judul Dokumen</th>
               <th>Jenis &middot; Unit</th>
-              <th>PIC</th>
               <th>Serah &middot; Terima</th>
               <th class="text-right" style="width:160px">Status</th>
             </tr></thead>
@@ -1080,7 +1073,7 @@ const V = {
   },
 
   usr() {
-    const hak = { "OD Leader": "Kelola dokumen & pengguna", "OD Staff": "Input pekerjaan & kelola dokumen sendiri", "Viewer": "Hanya melihat" };
+    const hak = { "OD Leader": "Kelola dokumen & pengguna", "OD Staff": "Input pekerjaan & kelola dokumen sendiri" };
     const body = `<div class="card">
       <div class="card-body p-0 table-responsive">
         <table class="table table-hover mb-0">
@@ -1157,7 +1150,7 @@ const V = {
           </div>` : ""}
         </div>
         <div class="col-lg-6">
-          ${ro() ? "" : syncCard()}
+          ${syncCard()}
         </div>
       </div>`;
     return pageWrap("Pengaturan", "", "", body);
@@ -1167,7 +1160,6 @@ const V = {
 
 /* ---------- Daily: aksi ---------- */
 function addA() {
-  if (ro()) return;
   const n = $("#nn").value.trim();
   if (!n) return toast("Nama pekerjaan wajib diisi");
   const a = A(TODAY, me.n, n, $("#rr").value, $("#kk").value.trim() || "-", $("#ss").value.trim() || "-", 0, $("#ee").value.trim() || "-");
@@ -1186,19 +1178,20 @@ function mv(id, d) {
 }
 function gen() {
   if (lead()) return genLead();
-  prev = "DAILY REPORT · " + fdl(TODAY) + "\n" + me.n + "\n\n" + mineD().map((a, i) => `${i + 1}. ${a.n}\n   *Hasil* : ${a.r}\n   *Kendala* : ${a.k}\n   *Solusi* : ${a.s}`).join("\n\n");
+  prev = "DAILY REPORT · " + fdl(TODAY) + "\n" + me.n + "\n\n" + mineD().map((a, i) => `${i + 1}. ${a.n}\n   Hasil : ${a.r}\n   Kendala : ${a.k}\n   Solusi : ${a.s}`).join("\n\n");
   go("daily");
 }
-// OD Leader: format Afternoon Briefing gabungan tim. Bagian Leader diberi nama tebal,
+// OD Leader: format Afternoon Briefing gabungan tim. Bagian Leader diawali nama depan,
 // bagian anggota lain (pekerjaan hari ini) menyusul tanpa nama. Nama pekerjaan otomatis KAPITAL.
+// Tanpa tanda * (format tebal WhatsApp) agar teks tampil polos.
 function genLead() {
-  const item = (a, i) => `${i + 1}. ${a.n.toUpperCase()}\n   *Hasil* : ${a.r}\n   *Kendala* : ${a.k}\n   *Solusi* : ${a.s}`;
+  const item = (a, i) => `${i + 1}. ${a.n.toUpperCase()}\n   Hasil : ${a.r}\n   Kendala : ${a.k}\n   Solusi : ${a.s}`;
   const list = l => l.map(item).join("\n\n");
   const others = team.filter(u => u.n != me.n)
     .map(u => acts.filter(a => a.u == u.n && a.d == TODAY))
     .filter(l => l.length);
-  prev = "Terlampir Bu Arleni\n*Afternoon Briefing BusDev*\n(" + fdl(TODAY) + ")\n\n"
-    + "*" + me.n.split(" ")[0] + "*\n" + list(mineD())
+  prev = "Afternoon Briefing BusDev\n(" + fdl(TODAY) + ")\n\n"
+    + me.n.split(" ")[0] + "\n" + list(mineD())
     + others.map(l => "\n\n" + list(l)).join("");
   go("daily");
 }
@@ -1211,12 +1204,12 @@ function printPrev() { printDoc("Daily Report", `<h1>Daily Report</h1><pre>${esc
 function saveRep() { mineD().forEach(a => a.sv = 1); prev = ""; go("daily"); toast("Tersimpan · otomatis masuk Weekly & Monthly"); }
 function del(id) {
   const o = acts.find(x => x.id == id);
-  if (!o || ro() || (o.u != me.n && !lead())) return;
+  if (!o || (o.u != me.n && !lead())) return;
   modal("Hapus aktivitas?", '<p class="text-muted">Aktivitas ini akan dihapus permanen.</p>', () => { syncQueueDel(o); acts = acts.filter(a => a.id != id); prev = ""; go("daily"); toast("Aktivitas dihapus"); }, "Hapus");
 }
 function ed(id) {
   const a = acts.find(x => x.id == id);
-  if (!a || ro() || (a.u != me.n && !lead())) return;
+  if (!a || (a.u != me.n && !lead())) return;
   modal("Edit aktivitas", `<div class="f">
     <div class="w"><label>Nama pekerjaan</label><input id="en" class="form-control" maxlength="200" value="${esc(a.n)}"></div>
     <div><label>Hasil</label><select id="er" class="form-control custom-select">${["Done","On Progress","Hold"].map(x=>`<option ${x==a.r?"selected":""}>${x}</option>`).join("")}</select></div>
@@ -1249,7 +1242,7 @@ function addD() {
 }
 function setSt(i, v) {
   const d = docs[i];
-  if (!d || ro() || !canDoc(d) || !ST.includes(v)) return;
+  if (!d || !canDoc(d) || !ST.includes(v)) return;
   d.st = v;
   if (sType(v) == "done" && d.rcv == "-") d.rcv = ddmm(TODAY);
   go("appr"); toast("Status diubah");
@@ -1295,13 +1288,9 @@ function stAdd() {
   });
 }
 function setPicDef(i, v) { if (!lead() || !team.some(u => u.n == v)) return; owners[JN[i]] = v; go("set"); toast("PIC bawaan diubah"); }
-function setOwner(i, v) {
-  if (me.p != "OD Leader" || !docs[i] || !team.some(u => u.n == v)) return;
-  docs[i].o = v; go("appr"); toast("PIC diubah");
-}
 function delD(i) {
   const d = docs[i];
-  if (!d || ro() || !canDoc(d)) return;
+  if (!d || !canDoc(d)) return;
   modal("Hapus dokumen?", `<p class="text-muted">${esc(d.t)}</p>`, () => { acts.forEach(a => { if (a.dc == d.id) a.dc = ""; }); docs.splice(i, 1); go("appr"); toast("Dokumen dihapus"); }, "Hapus");
 }
 
@@ -1343,7 +1332,6 @@ function editU(i) {
     if (!userOk(un, u)) return false;
     if (p && !pinOk(p)) { toast("PIN harus 4–8 angka"); return false; }
     if (u.p == "OD Leader" && r != "OD Leader" && users.filter(x => x.p == "OD Leader").length < 2) { toast("Minimal harus ada satu OD Leader"); return false; }
-    if (r == "Viewer" && hasData(old)) { toast("Pengguna ini punya data, tidak bisa dijadikan Viewer"); return false; }
     acts.forEach(a => { if (a.u == old) a.u = n; }); docs.forEach(d => { if (d.o == old) d.o = n; });
     if (fp == old) fp = n;
     if (p) u.pin = await pinHash(p);
@@ -1360,12 +1348,12 @@ function delU(i) {
 }
 function reopen() {
   const l = acts.filter(a => a.u == me.n && a.d == TODAY && a.sv && !a.imp);
-  if (ro() || !l.length) return;
+  if (!l.length) return;
   l.forEach(a => a.sv = 0); prev = ""; go("daily"); toast("Laporan dibuka kembali. Edit lalu simpan lagi");
 }
 function editD(i) {
   const d = docs[i];
-  if (!d || ro() || !canDoc(d)) return;
+  if (!d || !canDoc(d)) return;
   modal("Edit dokumen", `<div class="f">
     <div class="w"><label>Judul dokumen</label><input id="dt1" class="form-control" maxlength="250" value="${esc(d.t)}"></div>
     <div><label>Jenis</label><select id="dj" class="form-control custom-select">${[...new Set([...JN,d.j])].map(x=>`<option ${x==d.j?"selected":""}>${esc(x)}</option>`).join("")}</select></div>
@@ -1496,27 +1484,85 @@ async function expWeeklyXlsx(mem, per, st, suffix) {
       });
     });
   });
+  await saveXlsx(wb, "Weekly Report " + (per == "Semua" ? "Semua Minggu" : xwLab(per)) + (suffix ? " - " + suffix : "") + ".xlsx");
+}
+async function saveXlsx(wb, name) {
   const buf = await wb.xlsx.writeBuffer();
-  const name = "Weekly Report " + (per == "Semua" ? "Semua Minggu" : xwLab(per)) + (suffix ? " - " + suffix : "") + ".xlsx";
   const u = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
   const x = document.createElement("a");
   x.href = u; x.download = name; document.body.appendChild(x); x.click(); x.remove();
   setTimeout(() => URL.revokeObjectURL(u), 3000);
   toast("File Excel (.xlsx) diunduh");
 }
+/* ---------- Export Monthly (.xlsx) mengikuti template "ACHIEVEMENT BUSDEV" ----------
+   Satu sheet per bulan ("OKT'2026"), header merah NO | POSISI | ACHIEVEMENT | BADAN USAHA | Keterangan,
+   kolom POSISI di-merge per jabatan dan NO mulai ulang per jabatan. Dokumen berstatus batal tidak disertakan,
+   status "On Progress" ditulis "Proses Approval" seperti di template.
+   Urutan dalam jabatan: SOP, SE, MEMO, SA, IK, JD, lainnya; lalu tanggal penyerahan terlama dulu. */
+const XM = ["JAN", "FEB", "MAR", "APRIL", "MEI", "JUN", "JUL", "AGT", "SEP", "OKT", "NOV", "DES"];
+const JORD = ["SOP", "SE", "MEMO", "SA", "IK", "JD"];
+async function expAchXlsx(mem, per, suffix) {
+  const l = docs.filter(d => mem.includes(d.o) && (per == "Semua" || dmo(d) == per) && sType(d.st) != "cancel");
+  if (!l.length) return toast("Tidak ada dokumen untuk periode ini");
+  try { await loadExcelJS(); } catch (e) { return toast("Modul Excel gagal dimuat. Pastikan internet aktif"); }
+  const order = [...team.map(u => u.n).filter(n => mem.includes(n)), ...mem.filter(n => !team.some(u => u.n == n))];
+  const ji = d => { const i = JORD.indexOf(String(d.j).toUpperCase()); return i < 0 ? JORD.length : i; };
+  const wb = new ExcelJS.Workbook();
+  const thin = { style: "thin" }, bd = { top: thin, left: thin, bottom: thin, right: thin };
+  const font = { name: "Calibri", size: 10 }, mos = [...new Set(l.map(dmo))].sort();
+  mos.forEach(m => {
+    const ws = wb.addWorksheet(XM[+m.slice(5) - 1] + "'" + m.slice(0, 4));
+    [4.71, 35.43, 129.71, 30, 32.29].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    ["NO", "POSISI", "ACHIEVEMENT", "BADAN USAHA", "Keterangan"].forEach((v, j) => {
+      const c = ws.getCell(1, j + 1);
+      c.value = v; c.font = { ...font, bold: true }; c.border = bd;
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
+      c.alignment = { horizontal: "center", vertical: "middle" };
+    });
+    const groups = [];
+    order.forEach(n => {
+      const items = sortDocs(l.filter(d => d.o == n && dmo(d) == m), "old");
+      if (!items.length) return;
+      const p = POS_FULL[pos(n)] || pos(n), g = groups.find(x => x.p == p);
+      g ? g.items.push(...items) : groups.push({ p, items });
+    });
+    let r = 2;
+    groups.forEach(g => {
+      const r0 = r;
+      g.items.sort((a, b) => ji(a) - ji(b)).forEach((d, i) => {
+        const v = [i + 1, null, d.t, d.bu && d.bu != "-" ? d.bu : "", /^on progress$/i.test(d.st) ? "Proses Approval" : d.st]; // istilah template
+        v.forEach((x, j) => {
+          const c = ws.getCell(r, j + 1);
+          if (x !== null) c.value = x;
+          c.font = font; c.border = bd;
+          c.alignment = j == 2 ? { vertical: "middle", wrapText: true } : { horizontal: "center", vertical: "middle" };
+        });
+        r++;
+      });
+      if (r - 1 > r0) ws.mergeCells(r0, 2, r - 1, 2);
+      const a = ws.getCell(r0, 2);
+      a.value = g.p; a.font = font; a.border = bd;
+      a.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    });
+  });
+  const last = mos[mos.length - 1];
+  await saveXlsx(wb, "ACHIEVEMENT BUSDEV " + last.slice(0, 4) + " - " + MONTHS[+last.slice(5) - 1].toUpperCase() + (suffix ? " - " + suffix : "") + ".xlsx");
+}
 function expOne() { expWeeklyXlsx([fp], fw, fs, fp); }
 function expG(k) {
-  const opts = k == "Weekly" ? [["Semua", "Semua minggu"], ...weeks().map(w => [w, wkLab(w) + " (" + wkRng(w) + ")"])] : months().map(m => [m, mlab(m)]);
+  const opts = k == "Weekly" ? [["Semua", "Semua minggu"], ...weeks().map(w => [w, wkLab(w) + " (" + wkRng(w) + ")"])] : [...months().map(m => [m, mlab(m)]), ["Semua", "Semua bulan (khusus Excel)"]];
   modal("Export laporan gabungan · " + k, `<div class="f">
     <div class="w"><label>Anggota yang disertakan</label><div class="d-flex flex-wrap gap-2">${vteam().map(u => `<label class="d-flex align-items-center gap-1 mb-0 font-weight-500"><input type="checkbox" class="xg mr-1" value="${esc(u.n)}" checked> ${esc(u.n)} &middot; ${u.p}</label>`).join("")}</div></div>
     <div><label>Periode</label><select id="xp" class="form-control custom-select">${opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div>
-    <div><label>Format</label><select id="xf" class="form-control custom-select"><option value="Excel">${k == "Weekly" ? "Excel (.xlsx)" : "Excel (.csv)"}</option><option value="PDF">PDF (cetak)</option><option value="Word">Word (.doc)</option></select></div>
+    <div><label>Format</label><select id="xf" class="form-control custom-select"><option value="Excel">Excel (.xlsx)</option><option value="PDF">PDF (cetak)</option><option value="Word">Word (.doc)</option></select></div>
   </div><p class="text-muted mt-2">Nomor mulai ulang per posisi. Data mengikuti periode yang dipilih.</p>`,
   () => {
     const mem = [...document.querySelectorAll(".xg:checked")].map(x => x.value);
     if (!mem.length) { toast("Pilih minimal satu anggota"); return false; }
     const per = $("#xp").value, fmt = $("#xf").value, lab = (opts.find(o => o[0] == per) || [0, per])[1];
     if (k == "Weekly" && fmt == "Excel") { expWeeklyXlsx(mem, per, "Semua"); return; }
+    if (k == "Monthly" && fmt == "Excel") { expAchXlsx(mem, per); return; }
+    if (k == "Monthly" && per == "Semua") { toast("Semua bulan hanya tersedia untuk Excel"); return false; }
     const secs = k == "Weekly" ? mem.map(u => weeklySec(u, per, "Semua")) : mem.flatMap(u => monthlySecs(u, per));
     outTable(fmt, k + " Report · " + lab, secs, k.toLowerCase() + "-report-" + slug(String(per)));
     toast("Laporan gabungan (" + mem.length + " anggota) diproses");
@@ -1525,7 +1571,7 @@ function expG(k) {
 function pvw(f) {
   const u = fp, x = stat(saved().filter(a => a.u == u && mo(a) == fm)), d = vdocs().filter(a => a.o == u && dmo(a) == fm);
   modal("Preview " + f, `<pre>${esc(`LAPORAN BULANAN · ${mlab(fm).toUpperCase()}\n${pos(u)} · ${u}\n\nTotal aktivitas : ${x.t}\nDone / Proses / Hold : ${x.d} / ${x.o} / ${x.h}\nDokumen dibuat : ${d.length}\nDokumen Release : ${d.filter(a => sType(a.st) == "done").length}\nDokumen Proses Approval : ${d.filter(a => sType(a.st) != "done").length}`)}</pre>`,
-    () => { outTable(f, "Monthly Report · " + mlab(fm), monthlySecs(u, fm), "monthly-" + slug(u) + "-" + fm); toast(f + " diproses"); }, "Unduh");
+    () => { if (f == "Excel") return void expAchXlsx([u], fm, u); outTable(f, "Monthly Report · " + mlab(fm), monthlySecs(u, fm), "monthly-" + slug(u) + "-" + fm); toast(f + " diproses"); }, "Unduh");
 }
 function expAna(fmt) {
   const secs = [
@@ -1666,7 +1712,6 @@ function analyze(sheets) {
 async function readXlsx(inp) {
   const f = inp.files[0]; inp.value = "";
   if (!f) return;
-  if (ro()) return toast("Akun Viewer tidak dapat mengimpor");
   toast("Membaca file…");
   try {
     await loadXlsx();
@@ -1782,7 +1827,7 @@ function syncEntry(a) {
 }
 // Pekerjaan milik user ini yang perlu dikirim: punya SYNC ID, sudah disimpan, dan berubah sejak terakhir terkonfirmasi.
 function syncPending() {
-  if (!authed || !me || ro()) return { entries: [], del: [], hashes: {} };
+  if (!authed || !me) return { entries: [], del: [], hashes: {} };
   const E = acts.filter(a => a.g && a.sv && !a.imp && a.u == me.n).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.id - b.id);
   const entries = [], hashes = {};
   E.forEach(a => { const en = syncEntry(a), h = hashStr(JSON.stringify(en)); hashes[a.g] = h; if (syncCfg.sent[a.g] != h) entries.push(en); });
@@ -1838,7 +1883,7 @@ async function confirmSync(stamp, tries = 10) {
 }
 async function syncNow(manual) {
   const c = syncCfg;
-  if (!authed || ro()) return;
+  if (!authed) return;
   if (!c.url) { if (manual) toast("Alamat Web App belum diatur"); return; }
   if (!idOf(c.wl)) { if (manual) toast("Link spreadsheet Weekly Report belum diatur"); return; }
   if (syncBusy) { syncAgain = true; return; }
@@ -1867,7 +1912,7 @@ async function syncNow(manual) {
   if (syncAgain) { syncAgain = false; schedSync(); }
 }
 function schedSync() {
-  if (!syncReady() || !syncCfg.auto || !authed || !me || ro()) return;
+  if (!syncReady() || !syncCfg.auto || !authed || !me) return;
   clearTimeout(syncT);
   syncT = setTimeout(() => {
     if (syncCfg.ok === false && Date.now() - syncLastTry < 60000) return;   // jangan membanjiri saat sedang bermasalah
@@ -1952,7 +1997,7 @@ ${ed ? `<details class="more"><summary>Petunjuk konfigurasi</summary><ol class="
   const su = users.find(u => u.n == sess);
   if (su) {
     me = su; authed = true;
-    fp = me.p == "Viewer" ? team[0].n : me.n;
+    fp = me.n;
     document.body.classList.remove("logged-out");
     $("#login").hidden = true;
     go("dash");

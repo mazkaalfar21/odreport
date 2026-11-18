@@ -72,8 +72,8 @@ Setiap perubahan yang di-*commit* ke branch `main` akan otomatis dideploy ulang 
 - Lewat Git: `git add . && git commit -m "pesan" && git push`.
 
 ## 6. Pertama kali dipakai
-Aplikasi dimulai dengan **halaman login** (username + PIN). Akun bawaan: `sekar` = Sekar Ayuning Srikandi (OD Leader), `rizal` = Rizal Hamdi (OD Staff), `visitor` = Visitor (Viewer). **PIN awal semua akun: 1234** — segera ubah lewat **User Management → Edit** (hanya OD Leader). Username bisa diubah dan pengguna baru bisa ditambah lewat User Management. Setelah masuk, masukkan data lama lewat **Pengaturan → Impor file Excel / Salin-tempel**, atau langsung isi Daily Report.
-Data versi lama otomatis dimigrasi (status lama menjadi On Progress / Release).
+Aplikasi dimulai dengan **halaman login** (username + PIN). Akun bawaan: `sekar` = Sekar Ayuning Srikandi (OD Leader), `rizal` = Rizal Hamdi (OD Staff). **PIN awal semua akun: 1234** — segera ubah lewat **User Management → Edit** (hanya OD Leader). Username bisa diubah dan pengguna baru bisa ditambah lewat User Management. Setelah masuk, masukkan data lama lewat **Pengaturan → Impor file Excel / Salin-tempel**, atau langsung isi Daily Report.
+Data versi lama otomatis dimigrasi (status lama menjadi On Progress / Release; akun ber-role Viewer dihapus).
 
 ## Cara kerja data (penting)
 
@@ -81,9 +81,9 @@ Data versi lama otomatis dimigrasi (status lama menjadi On Progress / Release).
 |---|---|
 | Penyimpanan | `localStorage` di browser masing-masing perangkat |
 | Berbagi antar pengguna | **Belum** di website. Data satu orang tidak terlihat orang lain, tetapi pekerjaan Daily Report semua user terkumpul di Google Sheets (lihat bagian Sinkron) |
-| Login | **Wajib** username + PIN saat membuka aplikasi. Username bawaan `sekar` / `rizal` / `visitor`, PIN awal `1234`, ubah di User Management. OD Staff hanya melihat report miliknya; OD Leader & Viewer melihat semua. Bukan pengamanan penuh (data tetap di localStorage) |
+| Login | **Wajib** username + PIN saat membuka aplikasi. Username bawaan `sekar` / `rizal`, PIN awal `1234`, ubah di User Management. OD Staff hanya melihat report miliknya; OD Leader melihat semua. Bukan pengamanan penuh (data tetap di localStorage) |
 | Backup | Pengaturan → Backup data (.json) dan Pulihkan |
-| Ekspor | Excel (.csv, dibuka di Excel), Word (.doc), PDF (lewat dialog cetak → Simpan sebagai PDF) |
+| Ekspor | Excel (.xlsx: Weekly sesuai template Weekly Report, Monthly sesuai template ACHIEVEMENT BUSDEV satu sheet per bulan; Approval Dokumen masih .csv), Word (.doc), PDF (lewat dialog cetak → Simpan sebagai PDF) |
 
 Jika data dipakai bersama oleh seluruh tim (Leader melihat laporan Staff secara langsung), dibutuhkan **database + login sungguhan** (misalnya Supabase atau Vercel Postgres). Itu tahap berikutnya dan struktur kode ini sudah disiapkan untuk itu.
 
